@@ -92,7 +92,7 @@ Recommended:
 
 ## API Documentation
 
-For Fi-NeMo's Python API documentation, see: https://www.kundajelab.github.io/Fi-NeMo/finemo.html
+For Fi-NeMo's Python API documentation, see: https://kundajelab.github.io/Fi-NeMo/finemo.html
 
 ## Command-Line Usage
 
