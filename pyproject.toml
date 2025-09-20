@@ -10,7 +10,7 @@ version = "0.40"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-    {name = "Austin Wang", email = "austin.wang1357@gmail.com"},
+    {name = "Austin Wang", email = "atwang@stanford.edu"},
     {name = "Anshul Kundaje", email = "akundaje@stanford.edu"}
 ]
 dependencies = [
