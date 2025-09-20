@@ -2,7 +2,7 @@ name: Generate API Documentation
 
 on:
   push:
-    branches: [ dev ]  
+    branches: [ main ]  
   workflow_dispatch:
 
 jobs:
