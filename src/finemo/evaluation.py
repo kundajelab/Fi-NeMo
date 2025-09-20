@@ -1,50 +1,69 @@
-import os
+"""Evaluation module for assessing Fi-NeMo motif discovery and hit calling performance.
+
+This module provides functions for:
+- Computing motif occurrence statistics and co-occurrence patterns
+- Evaluating motif discovery quality against TF-MoDISco results
+- Analyzing hit calling performance and recall metrics
+- Generating confusion matrices for seqlet-hit comparisons
+"""
+
 import warnings
-import importlib
+from typing import List, Tuple, Dict, Any, Union
 
 import numpy as np
+from numpy import ndarray
 import polars as pl
-import matplotlib.pyplot as plt
-from matplotlib.patheffects import AbstractPathEffect
-from matplotlib.textpath import TextPath
-from matplotlib.transforms import Affine2D
-from matplotlib.font_manager import FontProperties
-from jinja2 import Template
-
-from . import templates
+from jaxtyping import Float, Int
 
 
-def abbreviate_motif_name(name):
-    try:
-        group, motif = name.split(".")
+def get_motif_occurences(
+    hits_df: pl.LazyFrame, motif_names: List[str]
+) -> Tuple[pl.DataFrame, Int[ndarray, "M M"]]:
+    """Compute motif occurrence statistics and co-occurrence matrix.
 
-        if group == "pos_patterns":
-            group_short = "+"
-        elif group == "neg_patterns":
-            group_short = "-"
-        else:
-            raise Exception
+    This function analyzes motif occurrence patterns across peaks by creating
+    a pivot table of hit counts and computing pairwise co-occurrence statistics.
 
-        motif_num = motif.split("_")[1]
+    Parameters
+    ----------
+    hits_df : pl.LazyFrame
+        Lazy DataFrame containing hit data with required columns:
+        - peak_id : Peak identifier
+        - motif_name : Name of the motif
+        Additional columns are ignored.
+    motif_names : List[str]
+        List of motif names to include in analysis. Missing motifs
+        will be added as columns with zero counts.
 
-        return f"{group_short}/{motif_num}"
-    
-    except:
-        return name
+    Returns
+    -------
+    occ_df : pl.DataFrame
+        DataFrame with motif occurrence counts per peak. Contains:
+        - peak_id column
+        - One column per motif with hit counts
+        - 'total' column summing all motif counts per peak
+    coocc : Int[ndarray, "M M"]
+        Co-occurrence matrix where M = len(motif_names).
+        Entry (i,j) indicates number of peaks containing both motif i and motif j.
+        Diagonal entries show total peaks containing each motif.
 
-
-def get_motif_occurences(hits_df, motif_names):
+    Notes
+    -----
+    The co-occurrence matrix is computed using binary occurrence indicators,
+    so multiple hits of the same motif in a peak are treated as a single occurrence.
+    """
     occ_df = (
-        hits_df
-        .collect()
-        .pivot(index="peak_id", columns="motif_name", values="count", aggregate_function="sum")
+        hits_df.collect()
+        .with_columns(pl.lit(1).alias("count"))
+        .pivot(
+            on="motif_name", index="peak_id", values="count", aggregate_function="sum"
+        )
         .fill_null(0)
     )
 
     missing_cols = set(motif_names) - set(occ_df.columns)
     occ_df = (
-        occ_df
-        .with_columns([pl.lit(0).alias(m) for m in missing_cols])
+        occ_df.with_columns([pl.lit(0).alias(m) for m in missing_cols])
         .with_columns(total=pl.sum_horizontal(*motif_names))
         .sort(["peak_id"])
     )
@@ -54,7 +73,7 @@ def get_motif_occurences(hits_df, motif_names):
 
     occ_mat = np.zeros((num_peaks, num_motifs), dtype=np.int16)
     for i, m in enumerate(motif_names):
-        occ_mat[:,i] = occ_df.get_column(m).to_numpy()
+        occ_mat[:, i] = occ_df.get_column(m).to_numpy()
 
     occ_bin = (occ_mat > 0).astype(np.int32)
     coocc = occ_bin.T @ occ_bin
@@ -62,178 +81,250 @@ def get_motif_occurences(hits_df, motif_names):
     return occ_df, coocc
 
 
-def plot_hit_distributions(occ_df, motif_names, plot_dir):
-    motifs_dir = os.path.join(plot_dir, "motif_hit_distributions")
-    os.makedirs(motifs_dir, exist_ok=True)
+def get_cwms(
+    regions: Float[ndarray, "N 4 L"], positions_df: pl.DataFrame, motif_width: int
+) -> Float[ndarray, "H 4 W"]:
+    """Extract contribution weight matrices from regions based on hit positions.
 
-    for m in motif_names:
-        fig, ax = plt.subplots(figsize=(6, 2))
+    This function extracts motif-sized windows from contribution score regions
+    at positions specified by hit coordinates. It handles both forward and
+    reverse complement orientations and filters out invalid positions.
 
-        unique, counts = np.unique(occ_df.get_column(m), return_counts=True)
-        freq = counts / counts.sum()
-        num_bins = np.amax(unique, initial=0) + 1
-        x = np.arange(num_bins)
-        y = np.zeros(num_bins)
-        y[unique] = freq
-        ax.bar(x, y)
+    Parameters
+    ----------
+    regions : Float[ndarray, "N 4 L"]
+        Input contribution score regions multiplied by one-hot sequences.
+        Shape: (n_peaks, 4, region_width) where 4 represents DNA bases (A,C,G,T).
+    positions_df : pl.DataFrame
+        DataFrame containing hit positions with required columns:
+        - peak_id : int, Peak index (0-based)
+        - start_untrimmed : int, Start position in genomic coordinates
+        - peak_region_start : int, Peak region start coordinate
+        - is_revcomp : bool, Whether hit is on reverse complement strand
+    motif_width : int
+        Width of motifs to extract. Must be positive.
 
-        output_path = os.path.join(motifs_dir, f"{m}.png")
-        plt.savefig(output_path, dpi=300)
+    Returns
+    -------
+    cwms : Float[ndarray, "H 4 W"]
+        Extracted contribution weight matrices for valid hits.
+        Shape: (n_valid_hits, 4, motif_width)
+        Invalid hits (outside region boundaries) are filtered out.
 
-        plt.close(fig)
-    
-    fig, ax = plt.subplots(figsize=(8, 4))
+    Notes
+    -----
+    - Start positions are converted from genomic to region-relative coordinates
+    - Reverse complement hits have their sequence order reversed
+    - Hits extending beyond region boundaries are excluded
+    - The mean is computed across all valid hits, with warnings suppressed
+      for empty slices or invalid operations
 
-    unique, counts = np.unique(occ_df.get_column("total"), return_counts=True)
-    freq = counts / counts.sum()
-    num_bins = np.amax(unique, initial=0) + 1
-    x = np.arange(num_bins)
-    y = np.zeros(num_bins)
-    y[unique] = freq
-    ax.bar(x, y)
-
-    ax.set_xlabel("Motifs per peak")
-    ax.set_ylabel("Frequency")
-
-    output_path = os.path.join(plot_dir, "total_hit_distribution.png")
-    plt.savefig(output_path, dpi=300)
-
-    plt.close(fig)
-
-
-def plot_peak_motif_indicator_heatmap(peak_hit_counts, motif_names, output_path):
+    Raises
+    ------
+    ValueError
+        If motif_width is non-positive or positions_df lacks required columns.
     """
-    Plots a simple indicator heatmap of the motifs in each peak.
-    """
-    cov_norm = 1 / np.sqrt(np.diag(peak_hit_counts))
-    matrix = peak_hit_counts * cov_norm[:,None] * cov_norm[None,:]
-    motif_keys = [abbreviate_motif_name(m) for m in motif_names]
-
-    fig, ax = plt.subplots(figsize=(8, 8))
-    
-    # Plot the heatmap
-    ax.imshow(matrix, interpolation="nearest", aspect="auto", cmap="Greens")
-
-    # Set axes on heatmap
-    ax.set_yticks(np.arange(len(motif_keys)))
-    ax.set_yticklabels(motif_keys)
-    ax.set_xticks(np.arange(len(motif_keys)))
-    ax.set_xticklabels(motif_keys, rotation=90)
-    ax.set_xlabel("Motif i")
-    ax.set_ylabel("Motif j")
-
-    plt.savefig(output_path, dpi=300)
-
-    plt.close()
-
-
-def get_cwms(regions, positions_df, motif_width):
-    idx_df = (
-        positions_df
-        .select(
-            peak_idx=pl.col("peak_id"),
-            start_idx=pl.col("start_untrimmed") - pl.col("peak_region_start"),
-            is_revcomp=pl.col("is_revcomp")
-        )
+    idx_df = positions_df.select(
+        peak_idx=pl.col("peak_id"),
+        start_idx=pl.col("start_untrimmed") - pl.col("peak_region_start"),
+        is_revcomp=pl.col("is_revcomp"),
     )
-    peak_idx = idx_df.get_column('peak_idx').to_numpy()
-    start_idx = idx_df.get_column('start_idx').to_numpy()
+    peak_idx = idx_df.get_column("peak_idx").to_numpy()
+    start_idx = idx_df.get_column("start_idx").to_numpy()
     is_revcomp = idx_df.get_column("is_revcomp").to_numpy().astype(bool)
 
-    # Ignore hits outside of region
+    # Filter hits that fall outside the region boundaries
     valid_mask = (start_idx >= 0) & (start_idx + motif_width <= regions.shape[2])
     peak_idx = peak_idx[valid_mask]
     start_idx = start_idx[valid_mask]
     is_revcomp = is_revcomp[valid_mask]
 
-    row_idx = peak_idx[:,None,None]
-    pos_idx = start_idx[:,None,None] + np.zeros((1,1,motif_width), dtype=int)
-    pos_idx[~is_revcomp,:,:] += np.arange(motif_width)[None,None,:]
-    pos_idx[is_revcomp,:,:] += np.arange(motif_width)[None,None,::-1]
-    nuc_idx = np.zeros((peak_idx.shape[0],4,1), dtype=int)
-    nuc_idx[~is_revcomp,:,:] += np.arange(4)[None,:,None]
-    nuc_idx[is_revcomp,:,:] += np.arange(4)[None,::-1,None]
+    row_idx = peak_idx[:, None, None]
+    pos_idx = start_idx[:, None, None] + np.zeros((1, 1, motif_width), dtype=int)
+    pos_idx[~is_revcomp, :, :] += np.arange(motif_width)[None, None, :]
+    pos_idx[is_revcomp, :, :] += np.arange(motif_width)[None, None, ::-1]
+    nuc_idx = np.zeros((peak_idx.shape[0], 4, 1), dtype=int)
+    nuc_idx[~is_revcomp, :, :] += np.arange(4)[None, :, None]
+    nuc_idx[is_revcomp, :, :] += np.arange(4)[None, ::-1, None]
 
     seqs = regions[row_idx, nuc_idx, pos_idx]
-    
+
     with warnings.catch_warnings():
-        warnings.filterwarnings(action='ignore', message='invalid value encountered in divide')
-        warnings.filterwarnings(action='ignore', message='Mean of empty slice')
+        warnings.filterwarnings(
+            action="ignore", message="invalid value encountered in divide"
+        )
+        warnings.filterwarnings(action="ignore", message="Mean of empty slice")
         cwms = seqs.mean(axis=0)
 
     return cwms
 
 
-def tfmodisco_comparison(regions, hits_df, peaks_df, seqlets_df, motifs_df, cwms_modisco, 
-                         motif_names, modisco_half_width, motif_width, compute_recall):
+def tfmodisco_comparison(
+    regions: Float[ndarray, "N 4 L"],
+    hits_df: Union[pl.DataFrame, pl.LazyFrame],
+    peaks_df: pl.DataFrame,
+    seqlets_df: Union[pl.DataFrame, pl.LazyFrame, None],
+    motifs_df: pl.DataFrame,
+    cwms_modisco: Float[ndarray, "M 4 W"],
+    motif_names: List[str],
+    modisco_half_width: int,
+    motif_width: int,
+    compute_recall: bool,
+) -> Tuple[
+    Dict[str, Dict[str, Any]],
+    pl.DataFrame,
+    Dict[str, Dict[str, Float[ndarray, "4 W"]]],
+    Dict[str, Dict[str, Tuple[int, int]]],
+]:
+    """Compare Fi-NeMo hits with TF-MoDISco seqlets and compute evaluation metrics.
+
+    This function performs comprehensive comparison between Fi-NeMo hit calls
+    and TF-MoDISco seqlets, computing recall metrics, CWM similarities,
+    and extracting contribution weight matrices for visualization.
+
+    Parameters
+    ----------
+    regions : Float[ndarray, "N 4 L"]
+        Contribution score regions multiplied by one-hot sequences.
+        Shape: (n_peaks, 4, region_length)
+    hits_df : Union[pl.DataFrame, pl.LazyFrame]
+        Fi-NeMo hit calls with required columns:
+        - peak_id, start_untrimmed, end_untrimmed, strand, motif_name
+    peaks_df : pl.DataFrame
+        Peak metadata with columns:
+        - peak_id, chr_id, peak_region_start
+    seqlets_df : Optional[pl.DataFrame]
+        TF-MoDISco seqlets with columns:
+        - chr_id, start_untrimmed, is_revcomp, motif_name
+        If None, only basic hit statistics are computed.
+    motifs_df : pl.DataFrame
+        Motif metadata with columns:
+        - motif_name, strand, motif_id, motif_start, motif_end
+    cwms_modisco : Float[ndarray, "M 4 W"]
+        TF-MoDISco contribution weight matrices.
+        Shape: (n_modisco_motifs, 4, motif_width)
+    motif_names : List[str]
+        Names of motifs to analyze.
+    modisco_half_width : int
+        Half-width for restricting hits to central region for fair comparison.
+    motif_width : int
+        Width of motifs for CWM extraction.
+    compute_recall : bool
+        Whether to compute recall metrics requiring seqlets_df.
+
+    Returns
+    -------
+    report_data : Dict[str, Dict[str, Any]]
+        Per-motif evaluation metrics including:
+        - num_hits_total, num_hits_restricted, num_seqlets
+        - num_overlaps, seqlet_recall, cwm_similarity
+    report_df : pl.DataFrame
+        Tabular format of report_data for easy analysis.
+    cwms : Dict[str, Dict[str, Float[ndarray, "4 W"]]]
+        Extracted CWMs for each motif and condition:
+        - hits_fc, hits_rc: Forward/reverse complement hits
+        - modisco_fc, modisco_rc: TF-MoDISco forward/reverse
+        - seqlets_only, hits_restricted_only: Non-overlapping instances
+    cwm_trim_bounds : Dict[str, Dict[str, Tuple[int, int]]]
+        Trimming boundaries for each CWM type and motif.
+
+    Notes
+    -----
+    - Hits are filtered to central region defined by modisco_half_width
+    - CWM similarity is computed as normalized dot product between hit and TF-MoDISco CWMs
+    - Recall metrics require both hits_df and seqlets_df to be non-empty
+    - Missing motifs are handled gracefully with empty DataFrames
+
+    Raises
+    ------
+    ValueError
+        If required columns are missing from input DataFrames.
+    """
+
+    # Ensure hits_df is LazyFrame for consistent operations
+    if isinstance(hits_df, pl.DataFrame):
+        hits_df = hits_df.lazy()
+
     hits_df = (
-        hits_df
-        .with_columns(pl.col('peak_id').cast(pl.UInt32))
-        .join(
-            peaks_df.lazy(), on="peak_id", how="inner"
-        )
+        hits_df.with_columns(pl.col("peak_id").cast(pl.UInt32))
+        .join(peaks_df.lazy(), on="peak_id", how="inner")
         .select(
             chr_id=pl.col("chr_id"),
             start_untrimmed=pl.col("start_untrimmed"),
             end_untrimmed=pl.col("end_untrimmed"),
-            is_revcomp=pl.col("strand") == '-',
+            is_revcomp=pl.col("strand") == "-",
             motif_name=pl.col("motif_name"),
             peak_region_start=pl.col("peak_region_start"),
-            peak_id=pl.col("peak_id")
+            peak_id=pl.col("peak_id"),
         )
     )
 
-    hits_unique = hits_df.unique(subset=["chr_id", "start_untrimmed", "motif_name", "is_revcomp"])
-    
+    hits_unique = hits_df.unique(
+        subset=["chr_id", "start_untrimmed", "motif_name", "is_revcomp"]
+    )
+
     region_len = regions.shape[2]
     center = region_len / 2
-    hits_filtered = (
-        hits_df
-        .filter(
-            ((pl.col("start_untrimmed") - pl.col("peak_region_start")) >= (center - modisco_half_width)) 
-            & ((pl.col("end_untrimmed") - pl.col("peak_region_start")) <= (center + modisco_half_width))
+    hits_filtered = hits_df.filter(
+        (
+            (pl.col("start_untrimmed") - pl.col("peak_region_start"))
+            >= (center - modisco_half_width)
         )
-        .unique(subset=["chr_id", "start_untrimmed", "motif_name", "is_revcomp"])
-    )
-    
-    if compute_recall:
-        overlaps_df = (
-            hits_filtered.join(
-                seqlets_df, 
-                on=["chr_id", "start_untrimmed", "is_revcomp", "motif_name"],
-                how="inner",
-            )
-            .collect()
+        & (
+            (pl.col("end_untrimmed") - pl.col("peak_region_start"))
+            <= (center + modisco_half_width)
         )
-
-        seqlets_only_df = (
-            seqlets_df.join(
-                hits_df, 
-                on=["chr_id", "start_untrimmed", "is_revcomp", "motif_name"],
-                how="anti",
-            )
-            .collect()
-        )
-
-        hits_only_filtered_df = (
-            hits_filtered.join(
-                seqlets_df, 
-                on=["chr_id", "start_untrimmed", "is_revcomp", "motif_name"],
-                how="anti",
-            )
-            .collect()
-        )
+    ).unique(subset=["chr_id", "start_untrimmed", "motif_name", "is_revcomp"])
 
     hits_by_motif = hits_unique.collect().partition_by("motif_name", as_dict=True)
-    hits_fitered_by_motif = hits_filtered.collect().partition_by("motif_name", as_dict=True)
+    hits_filtered_by_motif = hits_filtered.collect().partition_by(
+        "motif_name", as_dict=True
+    )
 
-    if seqlets_df is not None:
-        seqlets_by_motif = seqlets_df.collect().partition_by("motif_name", as_dict=True)
+    if seqlets_df is None:
+        seqlets_collected = None
+        seqlets_lazy = None
+    elif isinstance(seqlets_df, pl.LazyFrame):
+        seqlets_collected = seqlets_df.collect()
+        seqlets_lazy = seqlets_df
+    else:
+        seqlets_collected = seqlets_df
+        seqlets_lazy = seqlets_df.lazy()
 
-    if compute_recall:
+    if seqlets_collected is not None:
+        seqlets_by_motif = seqlets_collected.partition_by("motif_name", as_dict=True)
+    else:
+        seqlets_by_motif = {}
+
+    if compute_recall and seqlets_lazy is not None:
+        overlaps_df = hits_filtered.join(
+            seqlets_lazy,
+            on=["chr_id", "start_untrimmed", "is_revcomp", "motif_name"],
+            how="inner",
+        ).collect()
+
+        seqlets_only_df = seqlets_lazy.join(
+            hits_df,
+            on=["chr_id", "start_untrimmed", "is_revcomp", "motif_name"],
+            how="anti",
+        ).collect()
+
+        hits_only_filtered_df = hits_filtered.join(
+            seqlets_lazy,
+            on=["chr_id", "start_untrimmed", "is_revcomp", "motif_name"],
+            how="anti",
+        ).collect()
+
+        # Create partition dictionaries
         overlaps_by_motif = overlaps_df.partition_by("motif_name", as_dict=True)
         seqlets_only_by_motif = seqlets_only_df.partition_by("motif_name", as_dict=True)
-        hits_only_filtered_by_motif = hits_only_filtered_df.partition_by("motif_name", as_dict=True)
+        hits_only_filtered_by_motif = hits_only_filtered_df.partition_by(
+            "motif_name", as_dict=True
+        )
+    else:
+        overlaps_by_motif = {}
+        seqlets_only_by_motif = {}
+        hits_only_filtered_by_motif = {}
 
     report_data = {}
     cwms = {}
@@ -241,12 +332,18 @@ def tfmodisco_comparison(regions, hits_df, peaks_df, seqlets_df, motifs_df, cwms
     dummy_df = hits_df.clear().collect()
     for m in motif_names:
         hits = hits_by_motif.get((m,), dummy_df)
-        hits_filtered = hits_fitered_by_motif.get((m,), dummy_df)
+        hits_filtered = hits_filtered_by_motif.get((m,), dummy_df)
+
+        # Initialize default values
+        seqlets = dummy_df
+        overlaps = dummy_df
+        seqlets_only = dummy_df
+        hits_only_filtered = dummy_df
 
         if seqlets_df is not None:
             seqlets = seqlets_by_motif.get((m,), dummy_df)
 
-        if compute_recall:
+        if compute_recall and seqlets_df is not None:
             overlaps = overlaps_by_motif.get((m,), dummy_df)
             seqlets_only = seqlets_only_by_motif.get((m,), dummy_df)
             hits_only_filtered = hits_only_filtered_by_motif.get((m,), dummy_df)
@@ -259,48 +356,56 @@ def tfmodisco_comparison(regions, hits_df, peaks_df, seqlets_df, motifs_df, cwms
         if seqlets_df is not None:
             report_data[m]["num_seqlets"] = seqlets.height
 
-        if compute_recall:
+        if compute_recall and seqlets_df is not None:
             report_data[m] |= {
                 "num_overlaps": overlaps.height,
                 "num_seqlets_only": seqlets_only.height,
                 "num_hits_restricted_only": hits_only_filtered.height,
                 "seqlet_recall": np.float64(overlaps.height) / seqlets.height
+                if seqlets.height > 0
+                else 0.0,
             }
 
-        motif_data_fc = motifs_df.row(by_predicate=(pl.col("motif_name") == m) 
-                                      & (pl.col("strand") == "+"), named=True)
-        motif_data_rc = motifs_df.row(by_predicate=(pl.col("motif_name") == m) 
-                                      & (pl.col("strand") == "-"), named=True)
+        motif_data_fc = motifs_df.row(
+            by_predicate=(pl.col("motif_name") == m) & (pl.col("strand") == "+"),
+            named=True,
+        )
+        motif_data_rc = motifs_df.row(
+            by_predicate=(pl.col("motif_name") == m) & (pl.col("strand") == "-"),
+            named=True,
+        )
 
         cwms[m] = {
             "hits_fc": get_cwms(regions, hits, motif_width),
             "modisco_fc": cwms_modisco[motif_data_fc["motif_id"]],
             "modisco_rc": cwms_modisco[motif_data_rc["motif_id"]],
         }
-        cwms[m]["hits_rc"] = cwms[m]["hits_fc"][::-1,::-1]
+        cwms[m]["hits_rc"] = cwms[m]["hits_fc"][::-1, ::-1]
 
-        if compute_recall:
+        if compute_recall and seqlets_df is not None:
             cwms[m] |= {
                 "seqlets_only": get_cwms(regions, seqlets_only, motif_width),
-                "hits_restricted_only": get_cwms(regions, hits_only_filtered, motif_width),
+                "hits_restricted_only": get_cwms(
+                    regions, hits_only_filtered, motif_width
+                ),
             }
 
         bounds_fc = (motif_data_fc["motif_start"], motif_data_fc["motif_end"])
         bounds_rc = (motif_data_rc["motif_start"], motif_data_rc["motif_end"])
-        
+
         cwm_trim_bounds[m] = {
             "hits_fc": bounds_fc,
             "modisco_fc": bounds_fc,
             "modisco_rc": bounds_rc,
-            "hits_rc": bounds_rc
+            "hits_rc": bounds_rc,
         }
 
-        if compute_recall:
+        if compute_recall and seqlets_df is not None:
             cwm_trim_bounds[m] |= {
                 "seqlets_only": bounds_fc,
                 "hits_restricted_only": bounds_fc,
             }
-        
+
         hits_cwm = cwms[m]["hits_fc"]
         modisco_cwm = cwms[m]["modisco_fc"]
         hnorm = np.sqrt((hits_cwm**2).sum())
@@ -315,132 +420,127 @@ def tfmodisco_comparison(regions, hits_df, peaks_df, seqlets_df, motifs_df, cwms
     return report_data, report_df, cwms, cwm_trim_bounds
 
 
-class LogoGlyph(AbstractPathEffect):
-    def __init__(self, glyph, ref_glyph='E', font_props=None,
-                 offset=(0., 0.), **kwargs):
+def seqlet_confusion(
+    hits_df: Union[pl.DataFrame, pl.LazyFrame],
+    seqlets_df: Union[pl.DataFrame, pl.LazyFrame],
+    peaks_df: pl.DataFrame,
+    motif_names: List[str],
+    motif_width: int,
+) -> Tuple[pl.DataFrame, Float[ndarray, "M M"]]:
+    """Compute confusion matrix between TF-MoDISco seqlets and Fi-NeMo hits.
 
-        super().__init__(offset)
+    This function creates a confusion matrix showing the overlap between
+    TF-MoDISco seqlets (ground truth) and Fi-NeMo hits across different motifs.
+    Overlap frequencies are estimated using binned genomic coordinates.
 
-        path_orig = TextPath((0, 0), glyph, size=1, prop=font_props)
-        dims = path_orig.get_extents()
-        ref_dims = TextPath((0, 0), ref_glyph, size=1, prop=font_props).get_extents()
+    Parameters
+    ----------
+    hits_df : Union[pl.DataFrame, pl.LazyFrame]
+        Fi-NeMo hit calls with required columns:
+        - peak_id, start_untrimmed, end_untrimmed, strand, motif_name
+    seqlets_df : pl.DataFrame
+        TF-MoDISco seqlets with required columns:
+        - chr_id, start_untrimmed, end_untrimmed, motif_name
+    peaks_df : pl.DataFrame
+        Peak metadata for joining coordinates:
+        - peak_id, chr_id
+    motif_names : List[str]
+        Names of motifs to include in confusion matrix.
+        Determines matrix dimensions.
+    motif_width : int
+        Width used for binning genomic coordinates.
+        Positions are binned to motif_width resolution.
 
-        h_scale = 1 / dims.height
-        ref_width = max(dims.width, ref_dims.width)
-        w_scale = 1 / ref_width
-        w_shift = (1 - dims.width / ref_width) / 2
-        x_shift = -dims.x0
-        y_shift = -dims.y0
-        stretch = (
-            Affine2D()
-            .translate(tx=x_shift, ty=y_shift)
-            .scale(sx=w_scale, sy=h_scale)
-            .translate(tx=w_shift, ty=0)
+    Returns
+    -------
+    confusion_df : pl.DataFrame
+        Detailed confusion matrix in tabular format with columns:
+        - motif_name_seqlets : Seqlet motif labels (rows)
+        - motif_name_hits : Hit motif labels (columns)
+        - frac_overlap : Fraction of seqlets overlapping with hits
+    confusion_mat : Float[ndarray, "M M"]
+        Confusion matrix where M = len(motif_names).
+        Entry (i,j) = fraction of motif i seqlets overlapping with motif j hits.
+        Rows represent seqlet motifs, columns represent hit motifs.
+
+    Notes
+    -----
+    - Genomic coordinates are binned to motif_width resolution for overlap detection
+    - Only exact bin overlaps are considered (same chr_id, start_bin, end_bin)
+    - Fractions are computed as: overlaps / total_seqlets_per_motif
+    - Missing motif combinations result in zero entries in the confusion matrix
+
+    Raises
+    ------
+    ValueError
+        If required columns are missing from input DataFrames.
+    KeyError
+        If motif names in data don't match those in motif_names list.
+    """
+    bin_size = motif_width
+
+    # Ensure hits_df is LazyFrame for consistent operations
+    if isinstance(hits_df, pl.DataFrame):
+        hits_df = hits_df.lazy()
+
+    hits_binned = (
+        hits_df.with_columns(
+            peak_id=pl.col("peak_id").cast(pl.UInt32),
+            is_revcomp=pl.col("strand") == "-",
         )
-
-        self.path = stretch.transform_path(path_orig)
-
-        #: The dictionary of keywords to update the graphics collection with.
-        self._gc = kwargs
-
-    def draw_path(self, renderer, gc, tpath, affine, rgbFace):
-        return renderer.draw_path(gc, self.path, affine, rgbFace)
-
-
-def plot_logo(ax, heights, glyphs, colors=None, font_props=None, shade_bounds=None):
-    if colors is None:
-        colors = {g: None for g in glyphs}
-
-    ax.margins(x=0, y=0)
-    
-    pos_values = np.clip(heights, 0, None)
-    neg_values = np.clip(heights, None, 0)
-    pos_order = np.argsort(pos_values, axis=0)
-    neg_order = np.argsort(neg_values, axis=0)[::-1,:]
-    pos_reorder = np.argsort(pos_order, axis=0)
-    neg_reorder = np.argsort(neg_order, axis=0)
-    pos_offsets = np.take_along_axis(
-        np.cumsum(
-            np.take_along_axis(pos_values, pos_order, axis=0), axis=0
-        ), pos_reorder, axis=0
+        .join(peaks_df.lazy(), on="peak_id", how="inner")
+        .unique(subset=["chr_id", "start_untrimmed", "motif_name", "is_revcomp"])
+        .select(
+            chr_id=pl.col("chr_id"),
+            start_bin=pl.col("start_untrimmed") // bin_size,
+            end_bin=pl.col("end_untrimmed") // bin_size,
+            motif_name=pl.col("motif_name"),
+        )
     )
-    neg_offsets = np.take_along_axis(
-        np.cumsum(
-            np.take_along_axis(neg_values, neg_order, axis=0), axis=0
-        ), neg_reorder, axis=0
+
+    seqlets_lazy = seqlets_df.lazy()
+    seqlets_binned = seqlets_lazy.select(
+        chr_id=pl.col("chr_id"),
+        start_bin=pl.col("start_untrimmed") // bin_size,
+        end_bin=pl.col("end_untrimmed") // bin_size,
+        motif_name=pl.col("motif_name"),
     )
-    bottoms = pos_offsets + neg_offsets - heights
 
-    x = np.arange(heights.shape[1])
+    overlaps_df = seqlets_binned.join(
+        hits_binned, on=["chr_id", "start_bin", "end_bin"], how="inner", suffix="_hits"
+    )
 
-    for glyph, height, bottom in zip(glyphs, heights, bottoms):
-        ax.bar(x, height, 0.95, bottom=bottom, 
-               path_effects=[LogoGlyph(glyph, font_props=font_props)], color=colors[glyph])
+    seqlet_counts = (
+        seqlets_binned.group_by("motif_name").len(name="num_seqlets").collect()
+    )
+    overlap_counts = (
+        overlaps_df.group_by(["motif_name", "motif_name_hits"])
+        .len(name="num_overlaps")
+        .collect()
+    )
 
-    if shade_bounds is not None:
-        start, end = shade_bounds
-        ax.axvspan(start - 0.5, end - 0.5, color='0.9', zorder=-1)
+    num_motifs = len(motif_names)
+    confusion_mat = np.zeros((num_motifs, num_motifs), dtype=np.float32)
+    name_to_idx = {m: i for i, m in enumerate(motif_names)}
 
-    ax.axhline(zorder=-1, linewidth=0.5, color='black')
+    confusion_df = overlap_counts.join(
+        seqlet_counts, on="motif_name", how="inner"
+    ).select(
+        motif_name_seqlets=pl.col("motif_name"),
+        motif_name_hits=pl.col("motif_name_hits"),
+        frac_overlap=pl.col("num_overlaps") / pl.col("num_seqlets"),
+    )
 
+    confusion_idx_df = confusion_df.select(
+        row_idx=pl.col("motif_name_seqlets").replace_strict(name_to_idx),
+        col_idx=pl.col("motif_name_hits").replace_strict(name_to_idx),
+        frac_overlap=pl.col("frac_overlap"),
+    )
 
-LOGO_ALPHABET = 'ACGT'
-LOGO_COLORS = {"A": '#109648', "C": '#255C99', "G": '#F7B32B', "T": '#D62839'}
-LOGO_FONT = FontProperties(weight="bold")
+    row_idx = confusion_idx_df["row_idx"].to_numpy()
+    col_idx = confusion_idx_df["col_idx"].to_numpy()
+    frac_overlap = confusion_idx_df["frac_overlap"].to_numpy()
 
-def plot_cwms(cwms, trim_bounds, out_dir, alphabet=LOGO_ALPHABET, colors=LOGO_COLORS, font=LOGO_FONT):
-    for m, v in cwms.items():
-        motif_dir = os.path.join(out_dir, m)
-        os.makedirs(motif_dir, exist_ok=True)
-        for cwm_type, cwm in v.items():
-            output_path = os.path.join(motif_dir, f"{cwm_type}.png")
+    confusion_mat[row_idx, col_idx] = frac_overlap
 
-            fig, ax = plt.subplots(figsize=(10,2))
-
-            plot_logo(ax, cwm, alphabet, colors=colors, font_props=font, shade_bounds=trim_bounds[m][cwm_type])
-
-            for name, spine in ax.spines.items():
-                spine.set_visible(False)
-            
-            plt.savefig(output_path, dpi=100)
-            plt.close(fig)
-
-
-def plot_hit_vs_seqlet_counts(recall_data, output_path):
-    x = []
-    y = []
-    m = []
-    for k, v in recall_data.items():
-        x.append(v["num_hits_total"])
-        y.append(v["num_seqlets"])
-        m.append(k)
-
-    lim = max(np.amax(x), np.amax(y))
-
-    fig, ax = plt.subplots(figsize=(8,8))
-    ax.axline((0, 0), (lim, lim), color="0.3", linewidth=0.7, linestyle=(0, (5, 5)))
-    ax.scatter(x, y, s=5)
-    for i, txt in enumerate(m):
-        short = abbreviate_motif_name(txt)
-        ax.annotate(short, (x[i], y[i]), fontsize=8, weight="bold")
-
-    ax.set_yscale('log')
-    ax.set_xscale('log')
-
-    ax.set_xlabel("Hits per motif")
-    ax.set_ylabel("Seqlets per motif")
-
-    plt.savefig(output_path, dpi=300)
-    plt.close()
-
-
-def write_report(report_df, motif_names, out_path, compute_recall, use_seqlets):
-    template_str = importlib.resources.files(templates).joinpath('report.html').read_text()
-    template = Template(template_str)
-    report = template.render(report_data=report_df.iter_rows(named=True), 
-                             motif_names=motif_names, compute_recall=compute_recall, 
-                             use_seqlets=use_seqlets)
-    with open(out_path, "w") as f:
-        f.write(report)
-
-
+    return confusion_df, confusion_mat

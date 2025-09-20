@@ -170,6 +170,7 @@
         }
 
         .distplot img {
+            max-width: unset;
             margin-bottom: 0
         }
         
@@ -177,15 +178,24 @@
 </head>
 
 <body>
-<h1>Fi-NeMo hit calling report</h1>
+<h1>Fi-NeMo Motif Hit Calling Report</h1>
+
+<p>
+    This report provides a comprehensive analysis of motif instance calling results from Fi-NeMo, 
+    a GPU-accelerated method for identifying transcription factor binding sites using neural network
+    contribution scores. Fi-NeMo uses a competitive optimization approach to comprehensively map motif
+    instances by solving a sparse linear reconstruction problem. The report compares Fi-NeMo hits 
+    with TF-MoDISco seqlets (when available) and provides detailed statistics on hit quality and 
+    motif discovery performance.
+</p>
 
 {% if not use_seqlets %}
 <blockquote>
-    Seqlet comparisons are not shown because a TF-MoDISco H5 file with seqlet data is not provided.
+    <strong>Note:</strong> Seqlet comparisons are not shown because a TF-MoDISco H5 file with seqlet data was not provided.
 </blockquote>
 {% elif not compute_recall %}
 <blockquote>
-    Seqlet recall and other statistics directly comparing hits and seqlets are not computed because the <code>-n/--no-recall</code> argument is set.
+    <strong>Note:</strong> Seqlet recall and other statistics directly comparing hits and seqlets are not computed because the <code>-n/--no-recall</code> argument was specified.
 </blockquote>
 {% endif %}
 
@@ -197,66 +207,69 @@
 
 <h3>Hit vs. seqlet counts</h3>
 <p>
-    This figure shows the number of hits called vs. the number of TF-MoDISco seqlets identified for each motif. 
-    The dashed line is the identity line. 
-    When comparing a shared set of regions, the hit counts should be mostly greater than the corresponding seqlet counts, since TF-MoDISco stringently filters seqlets and usually uses a smaller input window. 
+    This scatter plot compares the number of motif instances called by Fi-NeMo versus the number of TF-MoDISco seqlets 
+    identified for each motif. The dashed line represents perfect agreement (<code>y = x</code>). Fi-NeMo typically identifies 
+    an order of magnitude more motif instances than TF-MoDISco because: (1) TF-MoDISco applies stringent filtering criteria 
+    during seqlet identification, and (2) TF-MoDISco often analyzes smaller genomic windows than those used for hit calling.
 </p>
-<img src="hit_vs_seqlet_counts.png" width="780">
+<img src="hit_vs_seqlet_counts.svg" width="780">
 {% endif %}
 
-<h3>Hit and seqlet motif comparisons</h3>
+<h3>Motif-specific hit and seqlet analysis</h3>
 <p>
-    For each motif, this table examines the consistency between hits and TF-MoDISco seqlets. 
+    This table provides detailed statistics for each motif, comparing the consistency between Fi-NeMo hits 
+    and TF-MoDISco seqlets. The analysis includes hit counts, overlap statistics, and visual comparisons 
+    of contribution weight matrices (CWMs).
 </p>
 
 <p>
-    The following statistics report the number of hits, seqlets, and their relationships: 
+    <strong>Statistical measures include:</strong>
 </p>
 <ul>
-    <li><strong>Hits</strong>: The number of hits called by Fi-NeMo</li>
+    <li><strong>Hits</strong>: Total number of motif instances called by Fi-NeMo across all genomic regions</li>
     {% if compute_recall %}
-    <li><strong>Restricted Hits</strong>: The number of Fi-NeMo hits within the TF-MoDISco input regions</li>
+    <li><strong>Restricted Hits</strong>: Fi-NeMo hits overlapping with TF-MoDISco input regions (enables direct comparison)</li>
     {% endif %}
     {% if use_seqlets %}
-    <li><strong>Seqlets</strong>: The number of unique TF-MoDISco seqlets</li>
+    <li><strong>Seqlets</strong>: Unique TF-MoDISco seqlets used to construct this motif pattern</li>
     {% endif %}
     {% if compute_recall %}
-    <li><strong>Hit/Seqlet Overlaps</strong>: The number of hits that coincide with TF-MoDISco seqlets</li>
-    <li><strong>Missed Seqlets</strong>: The number of TF-MoDISco seqlets not called as hits</li>
-    <li><strong>Additional Restricted Hits</strong>: The number of hits within the TF-MoDISco input regions that are not identified as seqlets by TF-MoDISco</li>
-    <li><strong>Seqlet Recall</strong>: The fraction of seqlets that are called as hits</li>
+    <li><strong>Hit/Seqlet Overlaps</strong>: Fi-NeMo hits that spatially coincide with TF-MoDISco seqlets (successful recovery)</li>
+    <li><strong>Missed Seqlets</strong>: TF-MoDISco seqlets not identified as hits by Fi-NeMo (potential false negatives)</li>
+    <li><strong>Additional Restricted Hits</strong>: Fi-NeMo hits not identified as seqlets by TF-MoDISco (potential new discoveries)</li>
+    <li><strong>Seqlet Recall</strong>: Fraction of TF-MoDISco seqlets successfully recovered as Fi-NeMo hits</li>
     {% endif %}
-    <li><strong>Hit-Seqlet CWM Similarity</strong>: The cosine similarity between the hit CWM and the TF-MoDISco CWM</li>
+    <li><strong>Hit-Seqlet CWM Similarity</strong>: Cosine similarity between average contribution scores of hits vs. seqlets</li>
 </ul>
 <p>
-    Note that the seqlet counts here may be lower than those shown in the tfmodisco-lite report due to double-counting in overlapping regions.
-    The seqlet counts shown here are unique while the counts in the tfmodisco-lite report are not de-duplicated.
-</p>
-{% if compute_recall %}
-<p>
-    Note that palindromic motifs may have lower recall due to disagreements on orientation.
-    If seqlet recall is near zero for all motifs, the <code>-W/--modisco-region-width</code> argument is likely incorrect.
-    This value is required to infer genomic coordinates of seqlets from the tfmodisco-lite output H5.
-</p>
-{% endif %}
-<p>
-    Motif CWMs (contribution weight matrices) are average contribution scores over a set of regions. The CWMs plotted here are:
+    <strong>Important notes:</strong>
 </p>
 <ul>
-    <li><strong>Hit CWM (FC)</strong>: The forward-strand CWM of all hits</li>
-    <li><strong>Hit CWM (RC)</strong>: The reverse-strand CWM of all hits</li>
-    <li><strong>TF-MoDISco CWM (FC/RC)</strong>: The CWM of all TF-MoDISco seqlets</li>
+    <li>Seqlet counts may appear lower than in TF-MoDISco-lite reports due to removal of duplicate seqlets</li>
     {% if compute_recall %}
-    <li><strong>Missed-Seqlet-Only CWM</strong>: The CWM of all TF-MoDISco seqlets that were not called as hits</li>
-    <li><strong>Additional-Restricted-Hit CWM</strong>: The CWM of all hits within the TF-MoDISco input regions that were not identified as seqlets by TF-MoDISco</li>
+    <li>Palindromic motifs may show reduced recall due to strand orientation ambiguity</li>
+    <li>If seqlet recall is near zero across all motifs, verify that the <code>-W/--modisco-region-width</code> parameter matches the original TF-MoDISco analysis window</li>
     {% endif %}
 </ul>
 <p>
-    The plots span the full untrimmed motif, with the trimmed motif shaded.
+    <strong>Contribution Weight Matrix (CWM) visualizations:</strong><br>
+    CWMs represent average contribution scores across motif instances and show the functional importance 
+    of each nucleotide position. The following CWMs are displayed for comparison:
 </p>
+<ul>
+    <li><strong>Hit CWM (FC/RC)</strong>: Average contribution patterns from Fi-NeMo hits on forward/reverse strands</li>
+    <li><strong>TF-MoDISco CWM (FC/RC)</strong>: Average contribution patterns from TF-MoDISco seqlets on forward/reverse strands</li>
+    {% if compute_recall %}
+    <li><strong>Missed-Seqlet-Only CWM</strong>: Contribution patterns from seqlets not recovered by Fi-NeMo (identifies potential algorithmic disagreements)</li>
+    <li><strong>Additional-Restricted-Hit CWM</strong>: Contribution patterns from Fi-NeMo hits not identified by TF-MoDISco</li>
+    {% endif %}
+</ul>
 <p>
-    The hit-seqlet similarity is the cosine similarity between the additional-restricted-hits CWM and the seqlet CWM. 
-    This statistic measures the similarity between hits that were missed by TF-MoDISco and the seqlets used to construct the motif.
+    All CWM plots span the full untrimmed motif width, with the core trimmed region highlighted by shading.
+    {% if compute_recall %}
+    The hit-seqlet CWM similarity quantifies the overall agreement between Fi-NeMo's discovered instances 
+    and TF-MoDISco's original motif definitions.
+    {% endif %}
 </p>
 
 <table class="wide_table">
@@ -309,59 +322,94 @@
             <td class="num_col">{{ item.num_seqlets_only }}</td>
             <td class="num_col">{{ item.num_hits_restricted_only }}</td>
             {% endif %}
-            <td class="cwm"><img src="CWMs/{{ item.motif_name }}/hits_fc.png" width="360"></td>
-            <td class="cwm"><img src="CWMs/{{ item.motif_name }}/hits_rc.png" width="360"></td>
-            <td class="cwm"><img src="CWMs/{{ item.motif_name }}/modisco_fc.png" width="360"></td>
-            <td class="cwm"><img src="CWMs/{{ item.motif_name }}/modisco_rc.png" width="360"></td>
+            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/hits_fc.svg" width="360"></td>
+            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/hits_rc.svg" width="360"></td>
+            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/modisco_fc.svg" width="360"></td>
+            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/modisco_rc.svg" width="360"></td>
             {% if compute_recall %}
-            <td class="cwm"><img src="CWMs/{{ item.motif_name }}/seqlets_only.png" width="360"></td>
-            <td class="cwm"><img src="CWMs/{{ item.motif_name }}/hits_restricted_only.png" width="360"></td>
+            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/seqlets_only.svg" width="360"></td>
+            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/hits_restricted_only.svg" width="360"></td>
             {% endif %}
         </tr>
         {% endfor %}
     </tbody>
 </table>
 
-<h2>Hit distributions</h2>
+{% if compute_recall %}
+
+<h3>Motif cross-assignment analysis</h3>
 <p>
-    The following figures visualize the distribution of hits across motifs and peaks. 
+    This confusion matrix identifies cases where Fi-NeMo hits of one motif type spatially overlap with 
+    TF-MoDISco seqlets of different motif types. Such cross-assignments can reveal related motif families,
+    algorithm differences, or cases where similar-looking motifs compete for the same binding sites.
+</p>
+<p>
+    The y-axis represents seqlet motif identity, the x-axis represents hit motif identity, and color intensity 
+    indicates the estimated overlap frequency per base of seqlet sequence. High off-diagonal values suggest
+    potential motif ambiguity and/or algorithmic disagreements at groups of putative TF binding sites.
+</p>
+<img src="seqlet_confusion.svg" width="780">
+
+{% endif %}
+
+<h2>Hit Quality and Distribution Analysis</h2>
+<p>
+    These visualizations examine the quality and distribution of Fi-NeMo hits across genomic regions and motifs,
+    measuring algorithm performance and signal strength.
 </p>
 
-<h3>Overall distribution of hits per peak</h3>
+<h3>Genome-wide hit density</h3>
 <p>
-    This plot shows the distribution of hit counts per peak for any motif.
-    The number of peaks with no hits should be near zero. 
+    This histogram shows the distribution of total hit counts per genomic region (across all motifs). 
+    A good distribution should show nearly all regions containing at least one hit.
 </p>
-<img src="total_hit_distribution.png" width="780">
+<img src="total_hit_distribution.svg" width="780">
 
-<h3>Per-motif distributions of hits per peak</h3>
+<h3>Motif-specific hit quality metrics</h3>
 <p>
-    These plots show the distribution of hit counts per peak for each motif.
+    These distribution plots characterize the quality and prevalence of hits for individual motifs:
 </p>
+<ul>
+    <li><strong>Hits Per Region</strong>: Frequency of motif occurrence across genomic regions (higher values suggest more prevalent motifs)</li>
+    <li><strong>Hit Coefficient</strong>: Strength of motif instance assignment by the optimization algorithm (higher values indicate stronger matches)</li>
+    <li><strong>Hit Similarity</strong>: Cosine similarity between individual hits and the motif CWM (higher values indicate closer pattern matching)</li>
+    <li><strong>Hit Importance</strong>: Total contribution score magnitude within hit regions (reflects functional significance from the neural network model)</li>
+</ul>
 <table>
     <thead>
         <tr>
             <th>Motif Name</th>
-            <th class="distplot">Hits Per Peak</th>
+            <th class="distplot">Hits Per Region</th>
+            <th class="distplot">Hit Coefficient</th>
+            <th class="distplot">Hit Similarity</th>
+            <th class="distplot">Hit Importance</th>
         </tr>
     </thead>
     <tbody>
         {% for m in motif_names %}
         <tr>
             <td><code>{{ m }}</code></td>
-            <td class="distplot"><img src="motif_hit_distributions/{{ m }}.png" width="480"></td>
+            <td class="distplot"><img src="motif_hit_distributions/{{ m|urlencode }}.svg" width="360"></td>
+            <td class="distplot"><img src="motif_stat_distributions/{{ m|urlencode }}_coefficients.svg" width="360"></td>
+            <td class="distplot"><img src="motif_stat_distributions/{{ m|urlencode }}_similarities.svg" width="360"></td>
+            <td class="distplot"><img src="motif_stat_distributions/{{ m|urlencode }}_importances.svg" width="360"></td>
         </tr>
         {% endfor %}
     </tbody>
 </table>
 
-<h3>Motif co-occurrence</h3>
+<h3>Motif co-occurrence analysis</h3>
 <p>
-    This heatmap shows the co-occurrence of motifs across peaks.
-    The color intensity here represents the cosine similarity between the motifs' occurrence across peaks,
-    where occurence is defined as the presence of a hit for a motif in a peak.
+    This correlation heatmap reveals which motifs tend to occur together in the same genomic regions, 
+    potentially indicating cooperative transcription factor binding or shared regulatory mechanisms.
+    Color intensity represents cosine similarity between motif occurrence patterns, where occurrence 
+    is defined as the presence of at least one hit for each motif within individual regions.
 </p>
-<img src="motif_cooocurrence.png" width="780">
+<p>
+    High positive correlations (dark colors) suggest motifs that frequently co-occur. 
+    Low correlations suggest independent or mutually exclusive binding patterns.
+</p>
+<img src="motif_cooocurrence.svg" width="780">
 
 </body>
 </html>

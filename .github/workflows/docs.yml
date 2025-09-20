@@ -1,0 +1,33 @@
+name: Generate API Documentation
+
+on:
+  push:
+    branches: [ main ]  
+  workflow_dispatch:
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+    
+    - name: Install dependencies
+      run: |
+        pip install pdoc
+        pip install -e .
+    
+    - name: Generate documentation
+      run: |
+        pdoc -d numpy --output-dir ./docs finemo
+    
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./docs

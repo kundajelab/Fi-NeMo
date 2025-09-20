@@ -1,7 +1,7 @@
-.conda
-.DS_Store
 *.egg-info
 __pycache__
+/.*
+!/.github
 /notebooks
-/notebooks/old
 /scratch.txt
+/scratch
