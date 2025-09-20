@@ -9,11 +9,11 @@ RUN apt-get update && \
 # Set the working directory where the repository will be cloned
 WORKDIR /opt
 
-# Clone the finemo_gpu repository from GitHub
-RUN git clone https://github.com/austintwang/finemo_gpu.git
+# Clone the Fi-NeMo repository from GitHub
+RUN git clone https://github.com/kundajelab/Fi-NeMo.git
 
 # Change directory into the repository
-WORKDIR /opt/finemo_gpu
+WORKDIR /opt/Fi-NeMo
 
 # Create a conda environment named "finemo" from the environment.yml file
 RUN conda env create -f environment.yml -n finemo
@@ -22,7 +22,7 @@ RUN conda env create -f environment.yml -n finemo
 # by prepending its bin directory to the PATH.
 ENV PATH /opt/conda/envs/finemo/bin:$PATH
 
-# Install the finemo_gpu package in editable mode.
+# Install the Fi-NeMo package in editable mode.
 RUN pip install --editable .
 
 # (Optional) Set an entrypoint or default command.

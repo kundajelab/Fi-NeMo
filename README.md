@@ -45,8 +45,8 @@ For now, we suggest installing it from source.
 #### Clone the GitHub Repository
 
 ```sh
-git clone https://github.com/austintwang/finemo_gpu.git
-cd finemo_gpu
+git clone https://github.com/kundajelab/Fi-NeMo
+cd Fi-NeMo
 ```
 
 #### Create a Conda Environment with Dependencies
@@ -92,7 +92,7 @@ Recommended:
 
 ## API Documentation
 
-For Fi-NeMo's Python API documentation, see: https://www.austintwang.com/finemo_gpu/finemo.html
+For Fi-NeMo's Python API documentation, see: https://www.kundajelab.github.io/Fi-NeMo/finemo.html
 
 ## Command-Line Usage
 
