@@ -58,8 +58,8 @@ Basic hit calling workflow:
 
 See Also
 --------
-TF-MoDISco : https://github.com/jmschrei/tfmodisco-lite
-BPNet : https://github.com/kundajelab/bpnet-refactor
+TF-MoDISco : https://github.com/kundajelab/tfmodisco
+BPNet : https://github.com/kundajelab/bpnet
 ChromBPNet: https://github.com/kundajelab/chrombpnet
 """
 

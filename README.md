@@ -27,18 +27,20 @@ Fi-NeMo solves motif instance calling as an optimization problem that reconstruc
 ## References
 
 Fi-NeMo is described in:
-> Tseng, Ramalingam, Wang, Schreiber, et al. "Decoding predictive motif lexicons and syntax from deep learning models of transcription factor binding profiles." (manuscript in preparation)
+> Wang, Ramalingam, Tseng, Schreiber, et al. "Decoding predictive motif lexicons and syntax from deep learning models of transcription factor binding profiles." (manuscript in preparation)
 
 Related tools:
-- [TF-MoDISco](https://github.com/jmschrei/tfmodisco-lite): *De novo* motif discovery from importance scores
-- [BPNet](https://github.com/kundajelab/bpnet-refactor): Deep learning models for TF binding prediction
+- [TF-MoDISco](https://github.com/kundajelab/tfmodisco): *De novo* motif discovery from importance scores
+- [BPNet](https://github.com/kundajelab/bpnet): Deep learning models for TF binding prediction
 - [ChromBPNet](https://github.com/kundajelab/chrombpnet): Deep learning models for chromatin accessibility prediction
 
 ## Installation
 
-> **Note**
-> This software is currently in development and will be available on PyPI once mature.
-For now, we suggest installing it from source.
+### Installing from PyPI
+
+```sh
+pip install finemo
+```
 
 ### Installing from Source
 
