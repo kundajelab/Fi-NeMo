@@ -4,9 +4,7 @@
 
 ## Overview
 
-Fi-NeMo implements a competitive optimization approach using proximal gradient descent to identify motif instances by solving a sparse linear reconstruction problem. Unlike traditional sequence-based methods, Fi-NeMo leverages context-aware importance scores from deep neural networks to comprehensively map transcription factor binding sites, enabling the identification of both high-confidence canonical motifs and low-prevalence cofactor motifs that are often missed by conventional approaches.
-
-The algorithm represents contribution scores as weighted combinations of motif contribution weight matrices (CWMs) at specific genomic positions. This competitive assignment process more closely reflects the biological reality of transcription factors competing for binding sites, resulting in superior sensitivity and specificity compared to sequence-only methods.
+Fi-NeMo implements a competitive optimization approach using proximal gradient descent to identify motif instances by solving a sparse linear reconstruction problem. Unlike traditional sequence-based methods, Fi-NeMo leverages context-aware importance scores from deep neural networks, enabling the identification of both high-confidence canonical motif instances and low-prevalence cofactor motif instances that are often missed by conventional approaches.
 
 ### Features
 
