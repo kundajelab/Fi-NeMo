@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "finemo"
 description = "Identification of regulatory elements from neural network contribution scores for DNA."
 keywords = ["deep learning", "genomics"]
-version = "0.40"
+version = "0.41"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
@@ -35,6 +35,9 @@ finemo = "finemo.main:cli"
 [project.urls]
 Homepage = "https://github.com/kundajelab/Fi-NeMo"
 Repository = "https://github.com/kundajelab/Fi-NeMo.git"
+
+[tool.setuptools.package-data]
+finemo = ["templates/*.html"]
 
 [tool.ruff]
 ignore = ["F722"]
