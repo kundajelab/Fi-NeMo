@@ -548,8 +548,9 @@ def report(
 
     occ_df, coooc = evaluation.get_motif_occurences(hits_df_lazy, motif_names_list)
 
-    report_data, report_df, cwms, trim_bounds = evaluation.tfmodisco_comparison(
+    report_data, report_df, motifs, trim_bounds = evaluation.tfmodisco_comparison(
         regions,
+        sequences,
         hits_df,
         peaks_df,
         seqlets_df,
@@ -573,14 +574,14 @@ def report(
     occ_path = os.path.join(out_dir, "motif_occurrences.tsv")
     data_io.write_occ_df(occ_df, occ_path)
 
-    data_io.write_report_data(report_df, cwms, out_dir)
+    data_io.write_report_data(report_df, motifs, out_dir)
 
-    visualization.plot_hit_stat_distributions(hits_df_lazy, motif_names_list, out_dir)
-    visualization.plot_hit_peak_distributions(occ_df, motif_names_list, out_dir)
-    visualization.plot_peak_motif_indicator_heatmap(coooc, motif_names_list, out_dir)
+    # visualization.plot_hit_stat_distributions(hits_df_lazy, motif_names_list, out_dir)
+    # visualization.plot_hit_peak_distributions(occ_df, motif_names_list, out_dir)
+    # visualization.plot_peak_motif_indicator_heatmap(coooc, motif_names_list, out_dir)
 
-    plot_dir = os.path.join(out_dir, "CWMs")
-    visualization.plot_cwms(cwms, trim_bounds, plot_dir)
+    plot_dir = os.path.join(out_dir, "motifs")
+    visualization.plot_motifs(motifs, trim_bounds, plot_dir)
 
     if seqlets_df is not None:
         seqlets_collected = (

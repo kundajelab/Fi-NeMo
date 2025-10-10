@@ -1454,7 +1454,9 @@ def write_seqlet_confusion_df(seqlet_confusion_df: pl.DataFrame, out_path: str) 
 
 
 def write_report_data(
-    report_df: pl.DataFrame, cwms: Dict[str, Dict[str, ndarray]], out_dir: str
+    report_df: pl.DataFrame, 
+    motifs: Dict[str, Dict[str, ndarray]], 
+    out_dir: str
 ) -> None:
     """Write comprehensive motif report data including CWMs and metadata.
 
@@ -1462,18 +1464,37 @@ def write_report_data(
     ----------
     report_df : pl.DataFrame
         Report metadata DataFrame.
-    cwms : Dict[str, Dict[str, ndarray]]
-        Nested dictionary of motif names to CWM types to arrays.
+    motifs : Dict[str, Dict[str, ndarray]]
+        Nested dictionary of motif names to motif types to arrays.
     out_dir : str
         Output directory for report files.
     """
-    cwms_dir = os.path.join(out_dir, "CWMs")
-    os.makedirs(cwms_dir, exist_ok=True)
+    motifs_dir = os.path.join(out_dir, "motifs")
+    os.makedirs(motifs_dir, exist_ok=True)
 
-    for m, v in cwms.items():
-        motif_dir = os.path.join(cwms_dir, m)
+    # Store motif, name
+    motif_names = []
+    stacked_motifs = {
+        "hits_fc": [],
+        "hits_rc": [],
+        "modisco_fc": [],
+        "modisco_rc": [],
+        "hits_ppm_fc": [],
+        "hits_ppm_rc": [],
+    }
+
+    for m, v in motifs.items():
+        motif_dir = os.path.join(motifs_dir, m)
         os.makedirs(motif_dir, exist_ok=True)
-        for cwm_type, cwm in v.items():
-            np.savetxt(os.path.join(motif_dir, f"{cwm_type}.txt"), cwm)
+        for motif_type, motif in v.items():
+            np.savetxt(os.path.join(motif_dir, f"{motif_type}.txt"), motif)
+
+            # Store motif, name
+            stacked_motifs[motif_type].append(motif)
+        motif_names.append(m)
+
+    # Save motifs as npy
+    for motif_type, motif in stacked_motifs.items():
+        np.save(os.path.join(motifs_dir, f"{motif_type}.npy"), np.stack(motif, dtype=np.float16, axis=0))
 
     report_df.write_csv(os.path.join(out_dir, "motif_report.tsv"), separator="\t")
