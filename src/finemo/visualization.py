@@ -508,8 +508,8 @@ LOGO_COLORS = {"A": "#109648", "C": "#255C99", "G": "#F7B32B", "T": "#D62839"}
 LOGO_FONT = FontProperties(weight="bold")
 
 
-def plot_cwms(
-    cwms: Dict[str, Dict[str, Float[ndarray, "4 W"]]],
+def plot_motifs(
+    motifs: Dict[str, Dict[str, Float[ndarray, "4 W"]]],
     trim_bounds: Dict[str, Dict[str, Tuple[int, int]]],
     out_dir: str,
     alphabet: str = LOGO_ALPHABET,
@@ -523,12 +523,12 @@ def plot_cwms(
 
     Parameters
     ----------
-    cwms : Dict[str, Dict[str, Float[ndarray, "4 W"]]]
-        Nested dictionary structure: {motif_name: {cwm_type: cwm_array}}.
-        Each cwm_array has shape (4, W) where W is motif width.
+    motifs : Dict[str, Dict[str, Float[ndarray, "4 W"]]]
+        Nested dictionary structure: {motif_name: {motif_type: motif_array}}.
+        Each motif_array has shape (4, W) where W is motif width.
         Rows correspond to bases in alphabet order.
     trim_bounds : Dict[str, Dict[str, Tuple[int, int]]]
-        Nested dictionary: {motif_name: {cwm_type: (start, end)}}.
+        Nested dictionary: {motif_name: {motif_type: (start, end)}}.
         Defines regions to shade in the sequence logos.
     out_dir : str
         Output directory where motif subdirectories will be created.
@@ -545,8 +545,8 @@ def plot_cwms(
     ```
     out_dir/
     ├── motif1/
-    │   ├── cwm_type1.png
-    │   ├── cwm_type1.svg
+    │   ├── motif_type1.png
+    │   ├── motif_type1.svg
     │   └── ...
     └── motif2/
         └── ...
@@ -555,27 +555,27 @@ def plot_cwms(
     Each plot is 10x2 inches with trimmed regions shaded if specified.
     Spines (plot borders) are hidden for cleaner appearance.
     """
-    for m, v in cwms.items():
+    for m, v in motifs.items():
         motif_dir = os.path.join(out_dir, m)
         os.makedirs(motif_dir, exist_ok=True)
-        for cwm_type, cwm in v.items():
+        for motif_type, motif in v.items():
             fig, ax = plt.subplots(figsize=(10, 2))
 
             plot_logo(
                 ax,
-                cwm,
+                motif,
                 alphabet,
                 colors=colors,
                 font_props=font,
-                shade_bounds=trim_bounds[m][cwm_type],
+                shade_bounds=trim_bounds[m][motif_type],
             )
 
             for name, spine in ax.spines.items():
                 spine.set_visible(False)
 
-            output_path_png = os.path.join(motif_dir, f"{cwm_type}.png")
+            output_path_png = os.path.join(motif_dir, f"{motif_type}.png")
             plt.savefig(output_path_png, dpi=100)
-            output_path_svg = os.path.join(motif_dir, f"{cwm_type}.svg")
+            output_path_svg = os.path.join(motif_dir, f"{motif_type}.svg")
             plt.savefig(output_path_svg)
 
             plt.close(fig)

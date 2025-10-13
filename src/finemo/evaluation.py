@@ -81,7 +81,7 @@ def get_motif_occurences(
     return occ_df, coocc
 
 
-def get_cwms(
+def get_motifs(
     regions: Float[ndarray, "N 4 L"], positions_df: pl.DataFrame, motif_width: int
 ) -> Float[ndarray, "H 4 W"]:
     """Extract contribution weight matrices from regions based on hit positions.
@@ -93,7 +93,8 @@ def get_cwms(
     Parameters
     ----------
     regions : Float[ndarray, "N 4 L"]
-        Input contribution score regions multiplied by one-hot sequences.
+        Input contribution score regions multiplied by one-hot sequences,
+        OR Input one-hot encoded sequences.
         Shape: (n_peaks, 4, region_width) where 4 represents DNA bases (A,C,G,T).
     positions_df : pl.DataFrame
         DataFrame containing hit positions with required columns:
@@ -106,8 +107,8 @@ def get_cwms(
 
     Returns
     -------
-    cwms : Float[ndarray, "H 4 W"]
-        Extracted contribution weight matrices for valid hits.
+    motifs : Float[ndarray, "H 4 W"]
+        Extracted motif matrices for valid hits.
         Shape: (n_valid_hits, 4, motif_width)
         Invalid hits (outside region boundaries) are filtered out.
 
@@ -154,13 +155,14 @@ def get_cwms(
             action="ignore", message="invalid value encountered in divide"
         )
         warnings.filterwarnings(action="ignore", message="Mean of empty slice")
-        cwms = seqs.mean(axis=0)
+        motifs = seqs.mean(axis=0)
 
-    return cwms
+    return motifs
 
 
 def tfmodisco_comparison(
     regions: Float[ndarray, "N 4 L"],
+    sequences: Int[ndarray, "N 4 L"],
     hits_df: Union[pl.DataFrame, pl.LazyFrame],
     peaks_df: pl.DataFrame,
     seqlets_df: Union[pl.DataFrame, pl.LazyFrame, None],
@@ -186,6 +188,9 @@ def tfmodisco_comparison(
     ----------
     regions : Float[ndarray, "N 4 L"]
         Contribution score regions multiplied by one-hot sequences.
+        Shape: (n_peaks, 4, region_length)
+    sequences : Int[ndarray, "N 4 L"]
+        One-hot encoded sequences corresponding to regions.
         Shape: (n_peaks, 4, region_length)
     hits_df : Union[pl.DataFrame, pl.LazyFrame]
         Fi-NeMo hit calls with required columns:
@@ -327,7 +332,7 @@ def tfmodisco_comparison(
         hits_only_filtered_by_motif = {}
 
     report_data = {}
-    cwms = {}
+    motifs = {}
     cwm_trim_bounds = {}
     dummy_df = hits_df.clear().collect()
     for m in motif_names:
@@ -375,17 +380,19 @@ def tfmodisco_comparison(
             named=True,
         )
 
-        cwms[m] = {
-            "hits_fc": get_cwms(regions, hits, motif_width),
+        motifs[m] = {
+            "hits_fc": get_motifs(regions, hits, motif_width),
             "modisco_fc": cwms_modisco[motif_data_fc["motif_id"]],
             "modisco_rc": cwms_modisco[motif_data_rc["motif_id"]],
         }
-        cwms[m]["hits_rc"] = cwms[m]["hits_fc"][::-1, ::-1]
+        motifs[m]["hits_rc"] = motifs[m]["hits_fc"][::-1, ::-1]
+        motifs[m]["hits_ppm_fc"] = get_motifs(sequences, hits, motif_width)
+        motifs[m]["hits_ppm_rc"] = motifs[m]["hits_ppm_fc"][::-1, ::-1]
 
         if compute_recall and seqlets_df is not None:
-            cwms[m] |= {
-                "seqlets_only": get_cwms(regions, seqlets_only, motif_width),
-                "hits_restricted_only": get_cwms(
+            motifs[m] |= {
+                "seqlets_only": get_motifs(regions, seqlets_only, motif_width),
+                "hits_restricted_only": get_motifs(
                     regions, hits_only_filtered, motif_width
                 ),
             }
@@ -398,6 +405,8 @@ def tfmodisco_comparison(
             "modisco_fc": bounds_fc,
             "modisco_rc": bounds_rc,
             "hits_rc": bounds_rc,
+            "hits_ppm_fc": bounds_fc,
+            "hits_ppm_rc": bounds_rc,
         }
 
         if compute_recall and seqlets_df is not None:
@@ -406,8 +415,8 @@ def tfmodisco_comparison(
                 "hits_restricted_only": bounds_fc,
             }
 
-        hits_cwm = cwms[m]["hits_fc"]
-        modisco_cwm = cwms[m]["modisco_fc"]
+        hits_cwm = motifs[m]["hits_fc"]
+        modisco_cwm = motifs[m]["modisco_fc"]
         hnorm = np.sqrt((hits_cwm**2).sum())
         snorm = np.sqrt((modisco_cwm**2).sum())
         cwm_sim = (hits_cwm * modisco_cwm).sum() / (hnorm * snorm)
@@ -417,7 +426,7 @@ def tfmodisco_comparison(
     records = [{"motif_name": k} | v for k, v in report_data.items()]
     report_df = pl.from_dicts(records)
 
-    return report_data, report_df, cwms, cwm_trim_bounds
+    return report_data, report_df, motifs, cwm_trim_bounds
 
 
 def seqlet_confusion(
