@@ -576,9 +576,9 @@ def report(
 
     data_io.write_report_data(report_df, motifs, out_dir)
 
-    # visualization.plot_hit_stat_distributions(hits_df_lazy, motif_names_list, out_dir)
-    # visualization.plot_hit_peak_distributions(occ_df, motif_names_list, out_dir)
-    # visualization.plot_peak_motif_indicator_heatmap(coooc, motif_names_list, out_dir)
+    visualization.plot_hit_stat_distributions(hits_df_lazy, motif_names_list, out_dir)
+    visualization.plot_hit_peak_distributions(occ_df, motif_names_list, out_dir)
+    visualization.plot_peak_motif_indicator_heatmap(coooc, motif_names_list, out_dir)
 
     plot_dir = os.path.join(out_dir, "motifs")
     visualization.plot_motifs(motifs, trim_bounds, plot_dir)
