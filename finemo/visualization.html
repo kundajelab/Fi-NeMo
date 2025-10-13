@@ -73,7 +73,7 @@
                     <a class="variable" href="#LOGO_FONT">LOGO_FONT</a>
             </li>
             <li>
-                    <a class="function" href="#plot_cwms">plot_cwms</a>
+                    <a class="function" href="#plot_motifs">plot_motifs</a>
             </li>
             <li>
                     <a class="function" href="#plot_hit_vs_seqlet_counts">plot_hit_vs_seqlet_counts</a>
@@ -624,8 +624,8 @@
 </span><span id="L-508"><a href="#L-508"><span class="linenos">508</span></a><span class="n">LOGO_FONT</span> <span class="o">=</span> <span class="n">FontProperties</span><span class="p">(</span><span class="n">weight</span><span class="o">=</span><span class="s2">&quot;bold&quot;</span><span class="p">)</span>
 </span><span id="L-509"><a href="#L-509"><span class="linenos">509</span></a>
 </span><span id="L-510"><a href="#L-510"><span class="linenos">510</span></a>
-</span><span id="L-511"><a href="#L-511"><span class="linenos">511</span></a><span class="k">def</span><span class="w"> </span><span class="nf">plot_cwms</span><span class="p">(</span>
-</span><span id="L-512"><a href="#L-512"><span class="linenos">512</span></a>    <span class="n">cwms</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndarray</span><span class="p">,</span> <span class="s2">&quot;4 W&quot;</span><span class="p">]]],</span>
+</span><span id="L-511"><a href="#L-511"><span class="linenos">511</span></a><span class="k">def</span><span class="w"> </span><span class="nf">plot_motifs</span><span class="p">(</span>
+</span><span id="L-512"><a href="#L-512"><span class="linenos">512</span></a>    <span class="n">motifs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndarray</span><span class="p">,</span> <span class="s2">&quot;4 W&quot;</span><span class="p">]]],</span>
 </span><span id="L-513"><a href="#L-513"><span class="linenos">513</span></a>    <span class="n">trim_bounds</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]],</span>
 </span><span id="L-514"><a href="#L-514"><span class="linenos">514</span></a>    <span class="n">out_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 </span><span id="L-515"><a href="#L-515"><span class="linenos">515</span></a>    <span class="n">alphabet</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">LOGO_ALPHABET</span><span class="p">,</span>
@@ -639,12 +639,12 @@
 </span><span id="L-523"><a href="#L-523"><span class="linenos">523</span></a>
 </span><span id="L-524"><a href="#L-524"><span class="linenos">524</span></a><span class="sd">    Parameters</span>
 </span><span id="L-525"><a href="#L-525"><span class="linenos">525</span></a><span class="sd">    ----------</span>
-</span><span id="L-526"><a href="#L-526"><span class="linenos">526</span></a><span class="sd">    cwms : Dict[str, Dict[str, Float[ndarray, &quot;4 W&quot;]]]</span>
-</span><span id="L-527"><a href="#L-527"><span class="linenos">527</span></a><span class="sd">        Nested dictionary structure: {motif_name: {cwm_type: cwm_array}}.</span>
-</span><span id="L-528"><a href="#L-528"><span class="linenos">528</span></a><span class="sd">        Each cwm_array has shape (4, W) where W is motif width.</span>
+</span><span id="L-526"><a href="#L-526"><span class="linenos">526</span></a><span class="sd">    motifs : Dict[str, Dict[str, Float[ndarray, &quot;4 W&quot;]]]</span>
+</span><span id="L-527"><a href="#L-527"><span class="linenos">527</span></a><span class="sd">        Nested dictionary structure: {motif_name: {motif_type: motif_array}}.</span>
+</span><span id="L-528"><a href="#L-528"><span class="linenos">528</span></a><span class="sd">        Each motif_array has shape (4, W) where W is motif width.</span>
 </span><span id="L-529"><a href="#L-529"><span class="linenos">529</span></a><span class="sd">        Rows correspond to bases in alphabet order.</span>
 </span><span id="L-530"><a href="#L-530"><span class="linenos">530</span></a><span class="sd">    trim_bounds : Dict[str, Dict[str, Tuple[int, int]]]</span>
-</span><span id="L-531"><a href="#L-531"><span class="linenos">531</span></a><span class="sd">        Nested dictionary: {motif_name: {cwm_type: (start, end)}}.</span>
+</span><span id="L-531"><a href="#L-531"><span class="linenos">531</span></a><span class="sd">        Nested dictionary: {motif_name: {motif_type: (start, end)}}.</span>
 </span><span id="L-532"><a href="#L-532"><span class="linenos">532</span></a><span class="sd">        Defines regions to shade in the sequence logos.</span>
 </span><span id="L-533"><a href="#L-533"><span class="linenos">533</span></a><span class="sd">    out_dir : str</span>
 </span><span id="L-534"><a href="#L-534"><span class="linenos">534</span></a><span class="sd">        Output directory where motif subdirectories will be created.</span>
@@ -661,8 +661,8 @@
 </span><span id="L-545"><a href="#L-545"><span class="linenos">545</span></a><span class="sd">    ```</span>
 </span><span id="L-546"><a href="#L-546"><span class="linenos">546</span></a><span class="sd">    out_dir/</span>
 </span><span id="L-547"><a href="#L-547"><span class="linenos">547</span></a><span class="sd">    ├── motif1/</span>
-</span><span id="L-548"><a href="#L-548"><span class="linenos">548</span></a><span class="sd">    │   ├── cwm_type1.png</span>
-</span><span id="L-549"><a href="#L-549"><span class="linenos">549</span></a><span class="sd">    │   ├── cwm_type1.svg</span>
+</span><span id="L-548"><a href="#L-548"><span class="linenos">548</span></a><span class="sd">    │   ├── motif_type1.png</span>
+</span><span id="L-549"><a href="#L-549"><span class="linenos">549</span></a><span class="sd">    │   ├── motif_type1.svg</span>
 </span><span id="L-550"><a href="#L-550"><span class="linenos">550</span></a><span class="sd">    │   └── ...</span>
 </span><span id="L-551"><a href="#L-551"><span class="linenos">551</span></a><span class="sd">    └── motif2/</span>
 </span><span id="L-552"><a href="#L-552"><span class="linenos">552</span></a><span class="sd">        └── ...</span>
@@ -671,27 +671,27 @@
 </span><span id="L-555"><a href="#L-555"><span class="linenos">555</span></a><span class="sd">    Each plot is 10x2 inches with trimmed regions shaded if specified.</span>
 </span><span id="L-556"><a href="#L-556"><span class="linenos">556</span></a><span class="sd">    Spines (plot borders) are hidden for cleaner appearance.</span>
 </span><span id="L-557"><a href="#L-557"><span class="linenos">557</span></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="L-558"><a href="#L-558"><span class="linenos">558</span></a>    <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cwms</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="L-558"><a href="#L-558"><span class="linenos">558</span></a>    <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">motifs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="L-559"><a href="#L-559"><span class="linenos">559</span></a>        <span class="n">motif_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
 </span><span id="L-560"><a href="#L-560"><span class="linenos">560</span></a>        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">motif_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="L-561"><a href="#L-561"><span class="linenos">561</span></a>        <span class="k">for</span> <span class="n">cwm_type</span><span class="p">,</span> <span class="n">cwm</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="L-561"><a href="#L-561"><span class="linenos">561</span></a>        <span class="k">for</span> <span class="n">motif_type</span><span class="p">,</span> <span class="n">motif</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="L-562"><a href="#L-562"><span class="linenos">562</span></a>            <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
 </span><span id="L-563"><a href="#L-563"><span class="linenos">563</span></a>
 </span><span id="L-564"><a href="#L-564"><span class="linenos">564</span></a>            <span class="n">plot_logo</span><span class="p">(</span>
 </span><span id="L-565"><a href="#L-565"><span class="linenos">565</span></a>                <span class="n">ax</span><span class="p">,</span>
-</span><span id="L-566"><a href="#L-566"><span class="linenos">566</span></a>                <span class="n">cwm</span><span class="p">,</span>
+</span><span id="L-566"><a href="#L-566"><span class="linenos">566</span></a>                <span class="n">motif</span><span class="p">,</span>
 </span><span id="L-567"><a href="#L-567"><span class="linenos">567</span></a>                <span class="n">alphabet</span><span class="p">,</span>
 </span><span id="L-568"><a href="#L-568"><span class="linenos">568</span></a>                <span class="n">colors</span><span class="o">=</span><span class="n">colors</span><span class="p">,</span>
 </span><span id="L-569"><a href="#L-569"><span class="linenos">569</span></a>                <span class="n">font_props</span><span class="o">=</span><span class="n">font</span><span class="p">,</span>
-</span><span id="L-570"><a href="#L-570"><span class="linenos">570</span></a>                <span class="n">shade_bounds</span><span class="o">=</span><span class="n">trim_bounds</span><span class="p">[</span><span class="n">m</span><span class="p">][</span><span class="n">cwm_type</span><span class="p">],</span>
+</span><span id="L-570"><a href="#L-570"><span class="linenos">570</span></a>                <span class="n">shade_bounds</span><span class="o">=</span><span class="n">trim_bounds</span><span class="p">[</span><span class="n">m</span><span class="p">][</span><span class="n">motif_type</span><span class="p">],</span>
 </span><span id="L-571"><a href="#L-571"><span class="linenos">571</span></a>            <span class="p">)</span>
 </span><span id="L-572"><a href="#L-572"><span class="linenos">572</span></a>
 </span><span id="L-573"><a href="#L-573"><span class="linenos">573</span></a>            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">spine</span> <span class="ow">in</span> <span class="n">ax</span><span class="o">.</span><span class="n">spines</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
 </span><span id="L-574"><a href="#L-574"><span class="linenos">574</span></a>                <span class="n">spine</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
 </span><span id="L-575"><a href="#L-575"><span class="linenos">575</span></a>
-</span><span id="L-576"><a href="#L-576"><span class="linenos">576</span></a>            <span class="n">output_path_png</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">motif_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">cwm_type</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+</span><span id="L-576"><a href="#L-576"><span class="linenos">576</span></a>            <span class="n">output_path_png</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">motif_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">motif_type</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
 </span><span id="L-577"><a href="#L-577"><span class="linenos">577</span></a>            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_path_png</span><span class="p">,</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
-</span><span id="L-578"><a href="#L-578"><span class="linenos">578</span></a>            <span class="n">output_path_svg</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">motif_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">cwm_type</span><span class="si">}</span><span class="s2">.svg&quot;</span><span class="p">)</span>
+</span><span id="L-578"><a href="#L-578"><span class="linenos">578</span></a>            <span class="n">output_path_svg</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">motif_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">motif_type</span><span class="si">}</span><span class="s2">.svg&quot;</span><span class="p">)</span>
 </span><span id="L-579"><a href="#L-579"><span class="linenos">579</span></a>            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_path_svg</span><span class="p">)</span>
 </span><span id="L-580"><a href="#L-580"><span class="linenos">580</span></a>
 </span><span id="L-581"><a href="#L-581"><span class="linenos">581</span></a>            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">fig</span><span class="p">)</span>
@@ -1785,88 +1785,88 @@ Useful for highlighting core motif regions.</li>
     
 
                 </section>
-                <section id="plot_cwms">
-                            <input id="plot_cwms-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
+                <section id="plot_motifs">
+                            <input id="plot_motifs-view-source" class="view-source-toggle-state" type="checkbox" aria-hidden="true" tabindex="-1">
 <div class="attr function">
             
         <span class="def">def</span>
-        <span class="name">plot_cwms</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">cwms</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">jaxtyping</span><span class="o">.</span><span class="n">Float</span><span class="p">[</span><span class="n">ndarray</span><span class="p">,</span> <span class="s1">&#39;4 W&#39;</span><span class="p">]]]</span>,</span><span class="param">	<span class="n">trim_bounds</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]</span>,</span><span class="param">	<span class="n">out_dir</span><span class="p">:</span> <span class="nb">str</span>,</span><span class="param">	<span class="n">alphabet</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;ACGT&#39;</span>,</span><span class="param">	<span class="n">colors</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;A&#39;</span><span class="p">:</span> <span class="s1">&#39;#109648&#39;</span><span class="p">,</span> <span class="s1">&#39;C&#39;</span><span class="p">:</span> <span class="s1">&#39;#255C99&#39;</span><span class="p">,</span> <span class="s1">&#39;G&#39;</span><span class="p">:</span> <span class="s1">&#39;#F7B32B&#39;</span><span class="p">,</span> <span class="s1">&#39;T&#39;</span><span class="p">:</span> <span class="s1">&#39;#D62839&#39;</span><span class="p">}</span>,</span><span class="param">	<span class="n">font</span><span class="p">:</span> <span class="n">matplotlib</span><span class="o">.</span><span class="n">font_manager</span><span class="o">.</span><span class="n">FontProperties</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">matplotlib</span><span class="o">.</span><span class="n">font_manager</span><span class="o">.</span><span class="n">FontProperties</span> <span class="nb">object</span><span class="o">&gt;</span></span><span class="return-annotation">) -> <span class="kc">None</span>:</span></span>
+        <span class="name">plot_motifs</span><span class="signature pdoc-code multiline">(<span class="param">	<span class="n">motifs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">jaxtyping</span><span class="o">.</span><span class="n">Float</span><span class="p">[</span><span class="n">ndarray</span><span class="p">,</span> <span class="s1">&#39;4 W&#39;</span><span class="p">]]]</span>,</span><span class="param">	<span class="n">trim_bounds</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]]</span>,</span><span class="param">	<span class="n">out_dir</span><span class="p">:</span> <span class="nb">str</span>,</span><span class="param">	<span class="n">alphabet</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s1">&#39;ACGT&#39;</span>,</span><span class="param">	<span class="n">colors</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">{</span><span class="s1">&#39;A&#39;</span><span class="p">:</span> <span class="s1">&#39;#109648&#39;</span><span class="p">,</span> <span class="s1">&#39;C&#39;</span><span class="p">:</span> <span class="s1">&#39;#255C99&#39;</span><span class="p">,</span> <span class="s1">&#39;G&#39;</span><span class="p">:</span> <span class="s1">&#39;#F7B32B&#39;</span><span class="p">,</span> <span class="s1">&#39;T&#39;</span><span class="p">:</span> <span class="s1">&#39;#D62839&#39;</span><span class="p">}</span>,</span><span class="param">	<span class="n">font</span><span class="p">:</span> <span class="n">matplotlib</span><span class="o">.</span><span class="n">font_manager</span><span class="o">.</span><span class="n">FontProperties</span> <span class="o">=</span> <span class="o">&lt;</span><span class="n">matplotlib</span><span class="o">.</span><span class="n">font_manager</span><span class="o">.</span><span class="n">FontProperties</span> <span class="nb">object</span><span class="o">&gt;</span></span><span class="return-annotation">) -> <span class="kc">None</span>:</span></span>
 
-                <label class="view-source-button" for="plot_cwms-view-source"><span>View Source</span></label>
+                <label class="view-source-button" for="plot_motifs-view-source"><span>View Source</span></label>
 
     </div>
-    <a class="headerlink" href="#plot_cwms"></a>
-            <div class="pdoc-code codehilite"><pre><span></span><span id="plot_cwms-512"><a href="#plot_cwms-512"><span class="linenos">512</span></a><span class="k">def</span><span class="w"> </span><span class="nf">plot_cwms</span><span class="p">(</span>
-</span><span id="plot_cwms-513"><a href="#plot_cwms-513"><span class="linenos">513</span></a>    <span class="n">cwms</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndarray</span><span class="p">,</span> <span class="s2">&quot;4 W&quot;</span><span class="p">]]],</span>
-</span><span id="plot_cwms-514"><a href="#plot_cwms-514"><span class="linenos">514</span></a>    <span class="n">trim_bounds</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]],</span>
-</span><span id="plot_cwms-515"><a href="#plot_cwms-515"><span class="linenos">515</span></a>    <span class="n">out_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
-</span><span id="plot_cwms-516"><a href="#plot_cwms-516"><span class="linenos">516</span></a>    <span class="n">alphabet</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">LOGO_ALPHABET</span><span class="p">,</span>
-</span><span id="plot_cwms-517"><a href="#plot_cwms-517"><span class="linenos">517</span></a>    <span class="n">colors</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">LOGO_COLORS</span><span class="p">,</span>
-</span><span id="plot_cwms-518"><a href="#plot_cwms-518"><span class="linenos">518</span></a>    <span class="n">font</span><span class="p">:</span> <span class="n">FontProperties</span> <span class="o">=</span> <span class="n">LOGO_FONT</span><span class="p">,</span>
-</span><span id="plot_cwms-519"><a href="#plot_cwms-519"><span class="linenos">519</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-</span><span id="plot_cwms-520"><a href="#plot_cwms-520"><span class="linenos">520</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Plot contribution weight matrices as sequence logos.</span>
-</span><span id="plot_cwms-521"><a href="#plot_cwms-521"><span class="linenos">521</span></a>
-</span><span id="plot_cwms-522"><a href="#plot_cwms-522"><span class="linenos">522</span></a><span class="sd">    Creates sequence logo plots for all motifs and CWM types, with optional</span>
-</span><span id="plot_cwms-523"><a href="#plot_cwms-523"><span class="linenos">523</span></a><span class="sd">    shading to highlight trimmed regions. Saves plots in both PNG and SVG formats.</span>
-</span><span id="plot_cwms-524"><a href="#plot_cwms-524"><span class="linenos">524</span></a>
-</span><span id="plot_cwms-525"><a href="#plot_cwms-525"><span class="linenos">525</span></a><span class="sd">    Parameters</span>
-</span><span id="plot_cwms-526"><a href="#plot_cwms-526"><span class="linenos">526</span></a><span class="sd">    ----------</span>
-</span><span id="plot_cwms-527"><a href="#plot_cwms-527"><span class="linenos">527</span></a><span class="sd">    cwms : Dict[str, Dict[str, Float[ndarray, &quot;4 W&quot;]]]</span>
-</span><span id="plot_cwms-528"><a href="#plot_cwms-528"><span class="linenos">528</span></a><span class="sd">        Nested dictionary structure: {motif_name: {cwm_type: cwm_array}}.</span>
-</span><span id="plot_cwms-529"><a href="#plot_cwms-529"><span class="linenos">529</span></a><span class="sd">        Each cwm_array has shape (4, W) where W is motif width.</span>
-</span><span id="plot_cwms-530"><a href="#plot_cwms-530"><span class="linenos">530</span></a><span class="sd">        Rows correspond to bases in alphabet order.</span>
-</span><span id="plot_cwms-531"><a href="#plot_cwms-531"><span class="linenos">531</span></a><span class="sd">    trim_bounds : Dict[str, Dict[str, Tuple[int, int]]]</span>
-</span><span id="plot_cwms-532"><a href="#plot_cwms-532"><span class="linenos">532</span></a><span class="sd">        Nested dictionary: {motif_name: {cwm_type: (start, end)}}.</span>
-</span><span id="plot_cwms-533"><a href="#plot_cwms-533"><span class="linenos">533</span></a><span class="sd">        Defines regions to shade in the sequence logos.</span>
-</span><span id="plot_cwms-534"><a href="#plot_cwms-534"><span class="linenos">534</span></a><span class="sd">    out_dir : str</span>
-</span><span id="plot_cwms-535"><a href="#plot_cwms-535"><span class="linenos">535</span></a><span class="sd">        Output directory where motif subdirectories will be created.</span>
-</span><span id="plot_cwms-536"><a href="#plot_cwms-536"><span class="linenos">536</span></a><span class="sd">    alphabet : str, default LOGO_ALPHABET</span>
-</span><span id="plot_cwms-537"><a href="#plot_cwms-537"><span class="linenos">537</span></a><span class="sd">        DNA alphabet string, typically &#39;ACGT&#39;.</span>
-</span><span id="plot_cwms-538"><a href="#plot_cwms-538"><span class="linenos">538</span></a><span class="sd">    colors : Dict[str, str], default LOGO_COLORS</span>
-</span><span id="plot_cwms-539"><a href="#plot_cwms-539"><span class="linenos">539</span></a><span class="sd">        Color mapping for DNA bases. Keys should match alphabet characters.</span>
-</span><span id="plot_cwms-540"><a href="#plot_cwms-540"><span class="linenos">540</span></a><span class="sd">    font : FontProperties, default LOGO_FONT</span>
-</span><span id="plot_cwms-541"><a href="#plot_cwms-541"><span class="linenos">541</span></a><span class="sd">        Font properties for sequence logo rendering.</span>
-</span><span id="plot_cwms-542"><a href="#plot_cwms-542"><span class="linenos">542</span></a>
-</span><span id="plot_cwms-543"><a href="#plot_cwms-543"><span class="linenos">543</span></a><span class="sd">    Notes</span>
-</span><span id="plot_cwms-544"><a href="#plot_cwms-544"><span class="linenos">544</span></a><span class="sd">    -----</span>
-</span><span id="plot_cwms-545"><a href="#plot_cwms-545"><span class="linenos">545</span></a><span class="sd">    Directory structure created:</span>
-</span><span id="plot_cwms-546"><a href="#plot_cwms-546"><span class="linenos">546</span></a><span class="sd">    ```</span>
-</span><span id="plot_cwms-547"><a href="#plot_cwms-547"><span class="linenos">547</span></a><span class="sd">    out_dir/</span>
-</span><span id="plot_cwms-548"><a href="#plot_cwms-548"><span class="linenos">548</span></a><span class="sd">    ├── motif1/</span>
-</span><span id="plot_cwms-549"><a href="#plot_cwms-549"><span class="linenos">549</span></a><span class="sd">    │   ├── cwm_type1.png</span>
-</span><span id="plot_cwms-550"><a href="#plot_cwms-550"><span class="linenos">550</span></a><span class="sd">    │   ├── cwm_type1.svg</span>
-</span><span id="plot_cwms-551"><a href="#plot_cwms-551"><span class="linenos">551</span></a><span class="sd">    │   └── ...</span>
-</span><span id="plot_cwms-552"><a href="#plot_cwms-552"><span class="linenos">552</span></a><span class="sd">    └── motif2/</span>
-</span><span id="plot_cwms-553"><a href="#plot_cwms-553"><span class="linenos">553</span></a><span class="sd">        └── ...</span>
-</span><span id="plot_cwms-554"><a href="#plot_cwms-554"><span class="linenos">554</span></a><span class="sd">    ```</span>
-</span><span id="plot_cwms-555"><a href="#plot_cwms-555"><span class="linenos">555</span></a>
-</span><span id="plot_cwms-556"><a href="#plot_cwms-556"><span class="linenos">556</span></a><span class="sd">    Each plot is 10x2 inches with trimmed regions shaded if specified.</span>
-</span><span id="plot_cwms-557"><a href="#plot_cwms-557"><span class="linenos">557</span></a><span class="sd">    Spines (plot borders) are hidden for cleaner appearance.</span>
-</span><span id="plot_cwms-558"><a href="#plot_cwms-558"><span class="linenos">558</span></a><span class="sd">    &quot;&quot;&quot;</span>
-</span><span id="plot_cwms-559"><a href="#plot_cwms-559"><span class="linenos">559</span></a>    <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">cwms</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-</span><span id="plot_cwms-560"><a href="#plot_cwms-560"><span class="linenos">560</span></a>        <span class="n">motif_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
-</span><span id="plot_cwms-561"><a href="#plot_cwms-561"><span class="linenos">561</span></a>        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">motif_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
-</span><span id="plot_cwms-562"><a href="#plot_cwms-562"><span class="linenos">562</span></a>        <span class="k">for</span> <span class="n">cwm_type</span><span class="p">,</span> <span class="n">cwm</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-</span><span id="plot_cwms-563"><a href="#plot_cwms-563"><span class="linenos">563</span></a>            <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
-</span><span id="plot_cwms-564"><a href="#plot_cwms-564"><span class="linenos">564</span></a>
-</span><span id="plot_cwms-565"><a href="#plot_cwms-565"><span class="linenos">565</span></a>            <span class="n">plot_logo</span><span class="p">(</span>
-</span><span id="plot_cwms-566"><a href="#plot_cwms-566"><span class="linenos">566</span></a>                <span class="n">ax</span><span class="p">,</span>
-</span><span id="plot_cwms-567"><a href="#plot_cwms-567"><span class="linenos">567</span></a>                <span class="n">cwm</span><span class="p">,</span>
-</span><span id="plot_cwms-568"><a href="#plot_cwms-568"><span class="linenos">568</span></a>                <span class="n">alphabet</span><span class="p">,</span>
-</span><span id="plot_cwms-569"><a href="#plot_cwms-569"><span class="linenos">569</span></a>                <span class="n">colors</span><span class="o">=</span><span class="n">colors</span><span class="p">,</span>
-</span><span id="plot_cwms-570"><a href="#plot_cwms-570"><span class="linenos">570</span></a>                <span class="n">font_props</span><span class="o">=</span><span class="n">font</span><span class="p">,</span>
-</span><span id="plot_cwms-571"><a href="#plot_cwms-571"><span class="linenos">571</span></a>                <span class="n">shade_bounds</span><span class="o">=</span><span class="n">trim_bounds</span><span class="p">[</span><span class="n">m</span><span class="p">][</span><span class="n">cwm_type</span><span class="p">],</span>
-</span><span id="plot_cwms-572"><a href="#plot_cwms-572"><span class="linenos">572</span></a>            <span class="p">)</span>
-</span><span id="plot_cwms-573"><a href="#plot_cwms-573"><span class="linenos">573</span></a>
-</span><span id="plot_cwms-574"><a href="#plot_cwms-574"><span class="linenos">574</span></a>            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">spine</span> <span class="ow">in</span> <span class="n">ax</span><span class="o">.</span><span class="n">spines</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
-</span><span id="plot_cwms-575"><a href="#plot_cwms-575"><span class="linenos">575</span></a>                <span class="n">spine</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
-</span><span id="plot_cwms-576"><a href="#plot_cwms-576"><span class="linenos">576</span></a>
-</span><span id="plot_cwms-577"><a href="#plot_cwms-577"><span class="linenos">577</span></a>            <span class="n">output_path_png</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">motif_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">cwm_type</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
-</span><span id="plot_cwms-578"><a href="#plot_cwms-578"><span class="linenos">578</span></a>            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_path_png</span><span class="p">,</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
-</span><span id="plot_cwms-579"><a href="#plot_cwms-579"><span class="linenos">579</span></a>            <span class="n">output_path_svg</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">motif_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">cwm_type</span><span class="si">}</span><span class="s2">.svg&quot;</span><span class="p">)</span>
-</span><span id="plot_cwms-580"><a href="#plot_cwms-580"><span class="linenos">580</span></a>            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_path_svg</span><span class="p">)</span>
-</span><span id="plot_cwms-581"><a href="#plot_cwms-581"><span class="linenos">581</span></a>
-</span><span id="plot_cwms-582"><a href="#plot_cwms-582"><span class="linenos">582</span></a>            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">fig</span><span class="p">)</span>
+    <a class="headerlink" href="#plot_motifs"></a>
+            <div class="pdoc-code codehilite"><pre><span></span><span id="plot_motifs-512"><a href="#plot_motifs-512"><span class="linenos">512</span></a><span class="k">def</span><span class="w"> </span><span class="nf">plot_motifs</span><span class="p">(</span>
+</span><span id="plot_motifs-513"><a href="#plot_motifs-513"><span class="linenos">513</span></a>    <span class="n">motifs</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Float</span><span class="p">[</span><span class="n">ndarray</span><span class="p">,</span> <span class="s2">&quot;4 W&quot;</span><span class="p">]]],</span>
+</span><span id="plot_motifs-514"><a href="#plot_motifs-514"><span class="linenos">514</span></a>    <span class="n">trim_bounds</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">int</span><span class="p">]]],</span>
+</span><span id="plot_motifs-515"><a href="#plot_motifs-515"><span class="linenos">515</span></a>    <span class="n">out_dir</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+</span><span id="plot_motifs-516"><a href="#plot_motifs-516"><span class="linenos">516</span></a>    <span class="n">alphabet</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">LOGO_ALPHABET</span><span class="p">,</span>
+</span><span id="plot_motifs-517"><a href="#plot_motifs-517"><span class="linenos">517</span></a>    <span class="n">colors</span><span class="p">:</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">LOGO_COLORS</span><span class="p">,</span>
+</span><span id="plot_motifs-518"><a href="#plot_motifs-518"><span class="linenos">518</span></a>    <span class="n">font</span><span class="p">:</span> <span class="n">FontProperties</span> <span class="o">=</span> <span class="n">LOGO_FONT</span><span class="p">,</span>
+</span><span id="plot_motifs-519"><a href="#plot_motifs-519"><span class="linenos">519</span></a><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+</span><span id="plot_motifs-520"><a href="#plot_motifs-520"><span class="linenos">520</span></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Plot contribution weight matrices as sequence logos.</span>
+</span><span id="plot_motifs-521"><a href="#plot_motifs-521"><span class="linenos">521</span></a>
+</span><span id="plot_motifs-522"><a href="#plot_motifs-522"><span class="linenos">522</span></a><span class="sd">    Creates sequence logo plots for all motifs and CWM types, with optional</span>
+</span><span id="plot_motifs-523"><a href="#plot_motifs-523"><span class="linenos">523</span></a><span class="sd">    shading to highlight trimmed regions. Saves plots in both PNG and SVG formats.</span>
+</span><span id="plot_motifs-524"><a href="#plot_motifs-524"><span class="linenos">524</span></a>
+</span><span id="plot_motifs-525"><a href="#plot_motifs-525"><span class="linenos">525</span></a><span class="sd">    Parameters</span>
+</span><span id="plot_motifs-526"><a href="#plot_motifs-526"><span class="linenos">526</span></a><span class="sd">    ----------</span>
+</span><span id="plot_motifs-527"><a href="#plot_motifs-527"><span class="linenos">527</span></a><span class="sd">    motifs : Dict[str, Dict[str, Float[ndarray, &quot;4 W&quot;]]]</span>
+</span><span id="plot_motifs-528"><a href="#plot_motifs-528"><span class="linenos">528</span></a><span class="sd">        Nested dictionary structure: {motif_name: {motif_type: motif_array}}.</span>
+</span><span id="plot_motifs-529"><a href="#plot_motifs-529"><span class="linenos">529</span></a><span class="sd">        Each motif_array has shape (4, W) where W is motif width.</span>
+</span><span id="plot_motifs-530"><a href="#plot_motifs-530"><span class="linenos">530</span></a><span class="sd">        Rows correspond to bases in alphabet order.</span>
+</span><span id="plot_motifs-531"><a href="#plot_motifs-531"><span class="linenos">531</span></a><span class="sd">    trim_bounds : Dict[str, Dict[str, Tuple[int, int]]]</span>
+</span><span id="plot_motifs-532"><a href="#plot_motifs-532"><span class="linenos">532</span></a><span class="sd">        Nested dictionary: {motif_name: {motif_type: (start, end)}}.</span>
+</span><span id="plot_motifs-533"><a href="#plot_motifs-533"><span class="linenos">533</span></a><span class="sd">        Defines regions to shade in the sequence logos.</span>
+</span><span id="plot_motifs-534"><a href="#plot_motifs-534"><span class="linenos">534</span></a><span class="sd">    out_dir : str</span>
+</span><span id="plot_motifs-535"><a href="#plot_motifs-535"><span class="linenos">535</span></a><span class="sd">        Output directory where motif subdirectories will be created.</span>
+</span><span id="plot_motifs-536"><a href="#plot_motifs-536"><span class="linenos">536</span></a><span class="sd">    alphabet : str, default LOGO_ALPHABET</span>
+</span><span id="plot_motifs-537"><a href="#plot_motifs-537"><span class="linenos">537</span></a><span class="sd">        DNA alphabet string, typically &#39;ACGT&#39;.</span>
+</span><span id="plot_motifs-538"><a href="#plot_motifs-538"><span class="linenos">538</span></a><span class="sd">    colors : Dict[str, str], default LOGO_COLORS</span>
+</span><span id="plot_motifs-539"><a href="#plot_motifs-539"><span class="linenos">539</span></a><span class="sd">        Color mapping for DNA bases. Keys should match alphabet characters.</span>
+</span><span id="plot_motifs-540"><a href="#plot_motifs-540"><span class="linenos">540</span></a><span class="sd">    font : FontProperties, default LOGO_FONT</span>
+</span><span id="plot_motifs-541"><a href="#plot_motifs-541"><span class="linenos">541</span></a><span class="sd">        Font properties for sequence logo rendering.</span>
+</span><span id="plot_motifs-542"><a href="#plot_motifs-542"><span class="linenos">542</span></a>
+</span><span id="plot_motifs-543"><a href="#plot_motifs-543"><span class="linenos">543</span></a><span class="sd">    Notes</span>
+</span><span id="plot_motifs-544"><a href="#plot_motifs-544"><span class="linenos">544</span></a><span class="sd">    -----</span>
+</span><span id="plot_motifs-545"><a href="#plot_motifs-545"><span class="linenos">545</span></a><span class="sd">    Directory structure created:</span>
+</span><span id="plot_motifs-546"><a href="#plot_motifs-546"><span class="linenos">546</span></a><span class="sd">    ```</span>
+</span><span id="plot_motifs-547"><a href="#plot_motifs-547"><span class="linenos">547</span></a><span class="sd">    out_dir/</span>
+</span><span id="plot_motifs-548"><a href="#plot_motifs-548"><span class="linenos">548</span></a><span class="sd">    ├── motif1/</span>
+</span><span id="plot_motifs-549"><a href="#plot_motifs-549"><span class="linenos">549</span></a><span class="sd">    │   ├── motif_type1.png</span>
+</span><span id="plot_motifs-550"><a href="#plot_motifs-550"><span class="linenos">550</span></a><span class="sd">    │   ├── motif_type1.svg</span>
+</span><span id="plot_motifs-551"><a href="#plot_motifs-551"><span class="linenos">551</span></a><span class="sd">    │   └── ...</span>
+</span><span id="plot_motifs-552"><a href="#plot_motifs-552"><span class="linenos">552</span></a><span class="sd">    └── motif2/</span>
+</span><span id="plot_motifs-553"><a href="#plot_motifs-553"><span class="linenos">553</span></a><span class="sd">        └── ...</span>
+</span><span id="plot_motifs-554"><a href="#plot_motifs-554"><span class="linenos">554</span></a><span class="sd">    ```</span>
+</span><span id="plot_motifs-555"><a href="#plot_motifs-555"><span class="linenos">555</span></a>
+</span><span id="plot_motifs-556"><a href="#plot_motifs-556"><span class="linenos">556</span></a><span class="sd">    Each plot is 10x2 inches with trimmed regions shaded if specified.</span>
+</span><span id="plot_motifs-557"><a href="#plot_motifs-557"><span class="linenos">557</span></a><span class="sd">    Spines (plot borders) are hidden for cleaner appearance.</span>
+</span><span id="plot_motifs-558"><a href="#plot_motifs-558"><span class="linenos">558</span></a><span class="sd">    &quot;&quot;&quot;</span>
+</span><span id="plot_motifs-559"><a href="#plot_motifs-559"><span class="linenos">559</span></a>    <span class="k">for</span> <span class="n">m</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">motifs</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="plot_motifs-560"><a href="#plot_motifs-560"><span class="linenos">560</span></a>        <span class="n">motif_dir</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">out_dir</span><span class="p">,</span> <span class="n">m</span><span class="p">)</span>
+</span><span id="plot_motifs-561"><a href="#plot_motifs-561"><span class="linenos">561</span></a>        <span class="n">os</span><span class="o">.</span><span class="n">makedirs</span><span class="p">(</span><span class="n">motif_dir</span><span class="p">,</span> <span class="n">exist_ok</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</span><span id="plot_motifs-562"><a href="#plot_motifs-562"><span class="linenos">562</span></a>        <span class="k">for</span> <span class="n">motif_type</span><span class="p">,</span> <span class="n">motif</span> <span class="ow">in</span> <span class="n">v</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="plot_motifs-563"><a href="#plot_motifs-563"><span class="linenos">563</span></a>            <span class="n">fig</span><span class="p">,</span> <span class="n">ax</span> <span class="o">=</span> <span class="n">plt</span><span class="o">.</span><span class="n">subplots</span><span class="p">(</span><span class="n">figsize</span><span class="o">=</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">2</span><span class="p">))</span>
+</span><span id="plot_motifs-564"><a href="#plot_motifs-564"><span class="linenos">564</span></a>
+</span><span id="plot_motifs-565"><a href="#plot_motifs-565"><span class="linenos">565</span></a>            <span class="n">plot_logo</span><span class="p">(</span>
+</span><span id="plot_motifs-566"><a href="#plot_motifs-566"><span class="linenos">566</span></a>                <span class="n">ax</span><span class="p">,</span>
+</span><span id="plot_motifs-567"><a href="#plot_motifs-567"><span class="linenos">567</span></a>                <span class="n">motif</span><span class="p">,</span>
+</span><span id="plot_motifs-568"><a href="#plot_motifs-568"><span class="linenos">568</span></a>                <span class="n">alphabet</span><span class="p">,</span>
+</span><span id="plot_motifs-569"><a href="#plot_motifs-569"><span class="linenos">569</span></a>                <span class="n">colors</span><span class="o">=</span><span class="n">colors</span><span class="p">,</span>
+</span><span id="plot_motifs-570"><a href="#plot_motifs-570"><span class="linenos">570</span></a>                <span class="n">font_props</span><span class="o">=</span><span class="n">font</span><span class="p">,</span>
+</span><span id="plot_motifs-571"><a href="#plot_motifs-571"><span class="linenos">571</span></a>                <span class="n">shade_bounds</span><span class="o">=</span><span class="n">trim_bounds</span><span class="p">[</span><span class="n">m</span><span class="p">][</span><span class="n">motif_type</span><span class="p">],</span>
+</span><span id="plot_motifs-572"><a href="#plot_motifs-572"><span class="linenos">572</span></a>            <span class="p">)</span>
+</span><span id="plot_motifs-573"><a href="#plot_motifs-573"><span class="linenos">573</span></a>
+</span><span id="plot_motifs-574"><a href="#plot_motifs-574"><span class="linenos">574</span></a>            <span class="k">for</span> <span class="n">name</span><span class="p">,</span> <span class="n">spine</span> <span class="ow">in</span> <span class="n">ax</span><span class="o">.</span><span class="n">spines</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+</span><span id="plot_motifs-575"><a href="#plot_motifs-575"><span class="linenos">575</span></a>                <span class="n">spine</span><span class="o">.</span><span class="n">set_visible</span><span class="p">(</span><span class="kc">False</span><span class="p">)</span>
+</span><span id="plot_motifs-576"><a href="#plot_motifs-576"><span class="linenos">576</span></a>
+</span><span id="plot_motifs-577"><a href="#plot_motifs-577"><span class="linenos">577</span></a>            <span class="n">output_path_png</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">motif_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">motif_type</span><span class="si">}</span><span class="s2">.png&quot;</span><span class="p">)</span>
+</span><span id="plot_motifs-578"><a href="#plot_motifs-578"><span class="linenos">578</span></a>            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_path_png</span><span class="p">,</span> <span class="n">dpi</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>
+</span><span id="plot_motifs-579"><a href="#plot_motifs-579"><span class="linenos">579</span></a>            <span class="n">output_path_svg</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">motif_dir</span><span class="p">,</span> <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">motif_type</span><span class="si">}</span><span class="s2">.svg&quot;</span><span class="p">)</span>
+</span><span id="plot_motifs-580"><a href="#plot_motifs-580"><span class="linenos">580</span></a>            <span class="n">plt</span><span class="o">.</span><span class="n">savefig</span><span class="p">(</span><span class="n">output_path_svg</span><span class="p">)</span>
+</span><span id="plot_motifs-581"><a href="#plot_motifs-581"><span class="linenos">581</span></a>
+</span><span id="plot_motifs-582"><a href="#plot_motifs-582"><span class="linenos">582</span></a>            <span class="n">plt</span><span class="o">.</span><span class="n">close</span><span class="p">(</span><span class="n">fig</span><span class="p">)</span>
 </span></pre></div>
 
 
@@ -1878,12 +1878,12 @@ shading to highlight trimmed regions. Saves plots in both PNG and SVG formats.</
 <h6 id="parameters">Parameters</h6>
 
 <ul>
-<li><strong>cwms</strong> (Dict[str, Dict[str, Float[ndarray, "4 W"]]]):
-Nested dictionary structure: {motif_name: {cwm_type: cwm_array}}.
-Each cwm_array has shape (4, W) where W is motif width.
+<li><strong>motifs</strong> (Dict[str, Dict[str, Float[ndarray, "4 W"]]]):
+Nested dictionary structure: {motif_name: {motif_type: motif_array}}.
+Each motif_array has shape (4, W) where W is motif width.
 Rows correspond to bases in alphabet order.</li>
 <li><strong>trim_bounds</strong> (Dict[str, Dict[str, Tuple[int, int]]]):
-Nested dictionary: {motif_name: {cwm_type: (start, end)}}.
+Nested dictionary: {motif_name: {motif_type: (start, end)}}.
 Defines regions to shade in the sequence logos.</li>
 <li><strong>out_dir</strong> (str):
 Output directory where motif subdirectories will be created.</li>
@@ -1901,8 +1901,8 @@ Font properties for sequence logo rendering.</li>
 
 <pre><code>out_dir/
 ├── motif1/
-│   ├── cwm_type1.png
-│   ├── cwm_type1.svg
+│   ├── motif_type1.png
+│   ├── motif_type1.svg
 │   └── ...
 └── motif2/
     └── ...
