@@ -707,7 +707,9 @@ def softmax(x: Float[ndarray, "4 W"], temp: float = 100) -> Float[ndarray, "4 W"
     return exp / np.sum(exp, axis=0, keepdims=True)
 
 
-def _motif_name_sort_key(data: Tuple[str, Any]) -> Union[Tuple[int, int], Tuple[int, str]]:
+def _motif_name_sort_key(
+    data: Tuple[str, Any],
+) -> Union[Tuple[int, int], Tuple[int, str]]:
     """Generate sort key for TF-MoDISco motif names.
 
     This function creates a sort key that orders motifs by pattern number,
@@ -1168,7 +1170,11 @@ def load_hits(
         Hit data with an additional 'count' column set to 1 for aggregation.
     """
     hits_df = pl.scan_csv(
-        hits_path, separator="\t", quote_char=None, schema=schema
+        hits_path,
+        separator="\t",
+        quote_char=None,
+        schema=schema,
+        null_values=[".", "NA", "null", "NaN"],
     ).with_columns(pl.lit(1).alias("count"))
 
     return hits_df if lazy else hits_df.collect()
@@ -1234,7 +1240,7 @@ def write_hits(
     - hits.tsv: Complete hit data with all instances
     - hits_unique.tsv: Deduplicated hits by genomic position and motif (excludes rows with NA chromosome coordinates)
     - hits.bed: BED format file for genome browser visualization
-    
+
     Rows where the chromosome field is NA are filtered out during deduplication
     to ensure that data_unique only contains well-defined genomic coordinates.
     """
@@ -1454,9 +1460,7 @@ def write_seqlet_confusion_df(seqlet_confusion_df: pl.DataFrame, out_path: str) 
 
 
 def write_report_data(
-    report_df: pl.DataFrame, 
-    motifs: Dict[str, Dict[str, ndarray]], 
-    out_dir: str
+    report_df: pl.DataFrame, motifs: Dict[str, Dict[str, ndarray]], out_dir: str
 ) -> None:
     """Write comprehensive motif report data including CWMs and metadata.
 
