@@ -245,6 +245,8 @@ Usage: `finemo call-hits -r <regions> -m <modisco_h5> -o <out_dir> [-p <peaks>] 
 - Lower values (e.g., 0.5-0.6) → more sensitive, may include weaker hits
 - Default of 0.7 works well for chromatin accessibility data
 - ChIP-seq data may benefit from lower values (0.6)
+> [!NOTE]
+> As FiNeMo is a _competitive_ optimization algorithm, hits are not identified monotonically: i.e., hits identified from a higher, more confident lambda (e.g., 0.9) will NOT necessarily be identified from a lower, more sensitive lambda (e.g., 0.7). Parameters should be selected holistically.
 
 **Motif Trimming (`-t/--cwm-trim-threshold`)**  
 - Determines where motif boundaries are set within full CWMs
