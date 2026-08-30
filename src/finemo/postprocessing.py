@@ -156,7 +156,7 @@ def collapse_hits(
 
     chroms = hits_df["chr"].unique(maintain_order=True)
 
-    if not chroms.is_empty():
+    if not chroms.is_null().all():
         chrom_to_id = {chrom: i for i, chrom in enumerate(chroms)}
         # Transform coordinates for overlap computation
         # Scale by 2 and adjust by overlap fraction to create effective overlap regions
