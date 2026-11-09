@@ -90,8 +90,8 @@ def _collapse_hits(
         # Check overlaps with active intervals
         for _, _, idx in heap:
             cmp = sim_new > similarities[idx]
-            out[idx] &= cmp
-            out[i] &= not cmp
+            out[idx] &= not cmp  # the new hit is better: demote the old one
+            out[i] &= cmp  # the new hit is not better: demote the new one
 
         # Add current interval to heap
         heapq.heappush(heap, (chrom_new, end_new, i))
@@ -154,9 +154,11 @@ def collapse_hits(
     if isinstance(hits_df, pl.LazyFrame):
         hits_df = hits_df.collect()
 
-    chroms = hits_df["chr"].unique(maintain_order=True)
+    chr_col = hits_df["chr"]
+    has_coords = chr_col.null_count() == 0 and not (chr_col == "NA").any()
 
-    if not chroms.is_empty():
+    if has_coords:
+        chroms = chr_col.unique(maintain_order=True)
         chrom_to_id = {chrom: i for i, chrom in enumerate(chroms)}
         # Transform coordinates for overlap computation
         # Scale by 2 and adjust by overlap fraction to create effective overlap regions
@@ -171,7 +173,7 @@ def collapse_hits(
     else:
         # Fall back to peak_id when chr column is not available
         df = hits_df.select(
-            chrom_id=pl.col("peak_id"),
+            chrom_id=pl.col("peak_id").cast(pl.UInt32),
             start_trim=pl.col("start") * 2
             + ((pl.col("end") - pl.col("start")) * overlap_frac).cast(pl.Int32),
             end_trim=pl.col("end") * 2
@@ -179,15 +181,17 @@ def collapse_hits(
             similarity=pl.col("hit_similarity"),
         )
 
-    # Rechunk for efficient array access
-    df = df.rechunk()
+    # The sweep needs hits ordered by (chrom_id, start_trim); remember the input order
+    df = df.with_row_index("row").sort(["chrom_id", "start_trim"]).rechunk()
     chrom_ids = df["chrom_id"].to_numpy(allow_copy=False)
     starts = df["start_trim"].to_numpy(allow_copy=False)
     ends = df["end_trim"].to_numpy(allow_copy=False)
     similarities = df["similarity"].to_numpy(allow_copy=False)
 
-    # Run the collapse algorithm
-    is_primary = _collapse_hits(chrom_ids, starts, ends, similarities)
+    # Run the collapse algorithm, then map results back to the input row order
+    is_primary_sorted = _collapse_hits(chrom_ids, starts, ends, similarities)
+    is_primary = np.empty_like(is_primary_sorted)
+    is_primary[df["row"].to_numpy()] = is_primary_sorted
 
     # Add primary indicator column to original DataFrame
     df_out = hits_df.with_columns(is_primary=pl.Series(is_primary, dtype=pl.UInt32))
