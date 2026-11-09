@@ -1283,7 +1283,9 @@ def write_hits(
         .select(HITS_DTYPES.keys())
     )
 
-    data_unique = data_all.filter(pl.col("chr").is_not_null()).unique(
+    data_unique = data_all.filter(
+        pl.col("chr").is_not_null() & (pl.col("chr") != "NA")
+    ).unique(
         subset=["chr", "start", "motif_name", "strand"], maintain_order=True
     )
 
