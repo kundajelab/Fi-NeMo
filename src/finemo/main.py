@@ -522,6 +522,7 @@ def report(
         warnings.warn(
             "Usage of the `--no-seqlets` flag is deprecated and will be removed in a future version. Please omit the `--modisco-h5` argument instead."
         )
+        compute_recall = False
         seqlets_df = None
     elif modisco_h5_path is None:
         compute_recall = False
@@ -546,7 +547,9 @@ def report(
 
     motif_names_list: List[str] = list(motif_names)
 
-    occ_df, coooc = evaluation.get_motif_occurences(hits_df_lazy, motif_names_list)
+    occ_df, coooc = evaluation.get_motif_occurences(
+        hits_df_lazy, motif_names_list, peaks_df.get_column("peak_id").to_numpy()
+    )
 
     report_data, report_df, motifs, trim_bounds = evaluation.tfmodisco_comparison(
         regions,
