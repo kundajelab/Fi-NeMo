@@ -303,7 +303,9 @@ def load_regions_from_bw(
             start = row["peak_region_start"]
             end = start + 2 * half_width
 
-            sequence_data: pyfaidx.FastaRecord = genome[chrom][start:end]  # type: ignore
+            # Clamp at the chromosome start: pyfaidx reads a negative start as an offset
+            # from the end. pyfaidx itself truncates at the chromosome end.
+            sequence_data: pyfaidx.FastaRecord = genome[chrom][max(start, 0) : end]  # type: ignore
             sequence: str = sequence_data.seq  # type: ignore
             start_adj: int = sequence_data.start  # type: ignore
             end_adj: int = sequence_data.end  # type: ignore
@@ -314,11 +316,11 @@ def load_regions_from_bw(
                 sequences[ind, :, a:b] = one_hot_encode(sequence)
 
                 for j, bw in enumerate(bws):
-                    contrib_buffer[j, :] = np.nan_to_num(
+                    contrib_buffer[j, : b - a] = np.nan_to_num(
                         bw.values(chrom, start_adj, end_adj, numpy=True)
                     )
 
-                contribs[ind, a:b] = np.mean(contrib_buffer, axis=0)
+                contribs[ind, a:b] = np.mean(contrib_buffer[:, : b - a], axis=0)
 
     finally:
         for bw in bws:
