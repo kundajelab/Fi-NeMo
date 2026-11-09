@@ -704,7 +704,7 @@ def softmax(x: Float[ndarray, "4 W"], temp: float = 100) -> Float[ndarray, "4 W"
     each position to have probabilities that sum to 1. The temperature
     parameter controls the sharpness of the distribution.
     """
-    norm_x = x - np.mean(x, axis=1, keepdims=True)
+    norm_x = x - np.max(x, axis=0, keepdims=True)
     exp = np.exp(temp * norm_x)
     return exp / np.sum(exp, axis=0, keepdims=True)
 
