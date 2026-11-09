@@ -693,9 +693,9 @@ def fit_contribs(
                 inds_buf[converged] = inds_batch
                 global_scale_buf[converged] = global_scale_batch
 
-                coef_inter[converged, :, :] *= 0
-                coef[converged, :, :] *= 0
-                i[converged] *= 0
+                coef_inter[converged, :, :] = 0.0
+                coef[converged, :, :] = 0.0
+                i[converged] = 0
 
                 step_sizes[converged] = step_size_max
 
@@ -718,9 +718,9 @@ def fit_contribs(
             active = inds_buf >= 0
 
             diverged = ~torch.isfinite(gap) & active
-            coef_inter[diverged, :, :] *= 0
-            coef[diverged, :, :] *= 0
-            i[diverged] *= 0
+            coef_inter[diverged, :, :] = 0.0
+            coef[diverged, :, :] = 0.0
+            i[diverged] = 0
             step_sizes[diverged, :, :] *= step_adjust
 
             timeouts = (i > max_steps).squeeze() & active
