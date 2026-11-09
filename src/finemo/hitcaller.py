@@ -557,10 +557,12 @@ def fit_contribs(
             device = torch.device("cpu")
             warnings.warn("No GPU available. Running on CPU.", RuntimeWarning)
 
-    # Compile optimizer if requested
-    global optimizer_step
-    if compile_optimizer:
-        optimizer_step = torch.compile(optimizer_step, fullgraph=True)
+    # Compile optimizer if requested (local binding: later calls are unaffected)
+    step_fn = (
+        torch.compile(optimizer_step, fullgraph=True)
+        if compile_optimizer
+        else optimizer_step
+    )
 
     # Convert inputs to PyTorch tensors with proper device placement
     cwms_tensor: torch.Tensor = torch.from_numpy(cwms)
@@ -700,7 +702,7 @@ def fit_contribs(
                 step_sizes[converged] = step_size_max
 
             # Optimization step
-            coef_inter, coef, gap, nll = optimizer_step(
+            coef_inter, coef, gap, nll = step_fn(
                 cwms_tensor,
                 contribs_buf,
                 importance_scale_buf,
