@@ -322,13 +322,13 @@
             <td class="num_col">{{ item.num_seqlets_only }}</td>
             <td class="num_col">{{ item.num_hits_restricted_only }}</td>
             {% endif %}
-            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/hits_fc.svg" width="360"></td>
-            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/hits_rc.svg" width="360"></td>
-            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/modisco_fc.svg" width="360"></td>
-            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/modisco_rc.svg" width="360"></td>
+            <td class="cwm"><img src="motifs/{{ item.motif_name|urlencode }}/hits_fc.svg" width="360"></td>
+            <td class="cwm"><img src="motifs/{{ item.motif_name|urlencode }}/hits_rc.svg" width="360"></td>
+            <td class="cwm"><img src="motifs/{{ item.motif_name|urlencode }}/modisco_fc.svg" width="360"></td>
+            <td class="cwm"><img src="motifs/{{ item.motif_name|urlencode }}/modisco_rc.svg" width="360"></td>
             {% if compute_recall %}
-            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/seqlets_only.svg" width="360"></td>
-            <td class="cwm"><img src="CWMs/{{ item.motif_name|urlencode }}/hits_restricted_only.svg" width="360"></td>
+            <td class="cwm"><img src="motifs/{{ item.motif_name|urlencode }}/seqlets_only.svg" width="360"></td>
+            <td class="cwm"><img src="motifs/{{ item.motif_name|urlencode }}/hits_restricted_only.svg" width="360"></td>
             {% endif %}
         </tr>
         {% endfor %}
