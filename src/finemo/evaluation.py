@@ -8,7 +8,7 @@ This module provides functions for:
 """
 
 import warnings
-from typing import List, Tuple, Dict, Any, Union
+from typing import List, Tuple, Dict, Any, Optional, Union
 
 import numpy as np
 from numpy import ndarray
@@ -17,7 +17,9 @@ from jaxtyping import Float, Int
 
 
 def get_motif_occurences(
-    hits_df: pl.LazyFrame, motif_names: List[str]
+    hits_df: pl.LazyFrame,
+    motif_names: List[str],
+    peak_ids: Optional[ndarray] = None,
 ) -> Tuple[pl.DataFrame, Int[ndarray, "M M"]]:
     """Compute motif occurrence statistics and co-occurrence matrix.
 
@@ -61,7 +63,14 @@ def get_motif_occurences(
         .fill_null(0)
     )
 
-    missing_cols = set(motif_names) - set(occ_df.columns)
+    # Regions without hits are absent from the pivot; add them back as all-zero rows
+    if peak_ids is not None:
+        all_peaks = pl.DataFrame(
+            {"peak_id": pl.Series(peak_ids).cast(occ_df.schema["peak_id"])}
+        )
+        occ_df = all_peaks.join(occ_df, on="peak_id", how="left").fill_null(0)
+
+    missing_cols = [m for m in motif_names if m not in occ_df.columns]
     occ_df = (
         occ_df.with_columns([pl.lit(0).alias(m) for m in missing_cols])
         .with_columns(total=pl.sum_horizontal(*motif_names))
