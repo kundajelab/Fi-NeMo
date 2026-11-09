@@ -185,7 +185,7 @@ def call_hits(
     step_size_max: float = 3.0,
     step_size_min: float = 0.08,
     sqrt_transform: bool = False,
-    convergence_tol: float = 0.0005,
+    convergence_tol: float = 0.00005,
     max_steps: int = 10000,
     batch_size: int = 2000,
     step_adjust: float = 0.7,
@@ -235,7 +235,7 @@ def call_hits(
         Minimum optimization step size.
     sqrt_transform : bool, default False
         Whether to apply signed square root transform to contributions.
-    convergence_tol : float, default 0.0005
+    convergence_tol : float, default 0.00005
         Convergence tolerance for duality gap.
     max_steps : int, default 10000
         Maximum number of optimization steps.
