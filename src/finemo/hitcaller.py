@@ -99,23 +99,23 @@ def prox_grad_step(
     residuals = contribs - pred  # (B, 4, L)
     ngrad = F.conv1d(residuals, cwms) * importance_scale  # (B, M, P)
 
-    # Negative log likelihood (proportional to MSE)
-    nll = (residuals**2).sum(dim=(1, 2))  # (B)
-
-    # Compute duality gap for convergence assessment
-    dual_norm = (ngrad / lambdas).amax(dim=(1, 2))  # (B)
-    dual_scale = (torch.clamp(1 / dual_norm, max=1.0) ** 2 + 1) / 2  # (B)
-    nll_scaled = nll * dual_scale  # (B)
-
-    dual_diff = (residuals * contribs).sum(dim=(1, 2))  # (B)
-    l1_term = (torch.abs(coefficients).sum(dim=2, keepdim=True) * lambdas).sum(
-        dim=(1, 2)
-    )  # (B)
-    dual_gap = (nll_scaled - dual_diff + l1_term).abs()  # (B)
-
     # Compute proximal gradient descent step
     c_next = coefficients + step_sizes * (ngrad - lambdas)  # (B, M, P)
     c_next = F.relu(c_next)  # Ensure non-negativity constraint
+
+    # Duality gap at the new, feasible coefficients (the ones that are saved), with the
+    # dual point t * r, t = 1 / max(1, max_j (A'r)_j / lambda_j). The gap
+    # 1/2 (1 + t^2) |r|^2 - t r'y + lambda'c is written as
+    # 1/2 (1 - t)^2 |r|^2 + sum_j c_j (lambda_j - t (A'r)_j): both terms are >= 0, so
+    # nothing cancels in float32. Clamping before the reciprocal keeps t = 1 when every
+    # correlation is negative.
+    r_next = contribs - F.conv_transpose1d(c_next * importance_scale, cwms) * sequences
+    g_next = F.conv1d(r_next, cwms) * importance_scale  # (B, M, P)
+    t = 1 / (g_next / lambdas).amax(dim=(1, 2)).clamp(min=1.0)  # (B)
+    nll = (r_next**2).sum(dim=(1, 2))  # (B), residual of the saved coefficients
+    dual_gap = 0.5 * (1 - t) ** 2 * nll + (
+        c_next * (lambdas - t[:, None, None] * g_next)
+    ).sum(dim=(1, 2))  # (B)
 
     return c_next, dual_gap, nll
 
