@@ -887,11 +887,15 @@ def load_modisco_motifs(
                 cwm_fwd = cwm_raw / cwm_norm
                 cwm_rev = cwm_fwd[::-1, ::-1]
 
-                if pattern_tag in trim_coords:
-                    start_fwd, end_fwd = trim_coords[pattern_tag]
+                trim_coord = trim_coords.get(
+                    pattern_tag_orig, trim_coords.get(pattern_tag)
+                )
+                if trim_coord is not None:
+                    start_fwd, end_fwd = trim_coord
                 else:
                     trim_threshold = trim_thresholds.get(
-                        pattern_tag, trim_threshold_default
+                        pattern_tag_orig,
+                        trim_thresholds.get(pattern_tag, trim_threshold_default),
                     )
                     start_fwd, end_fwd = trim_motif(cwm_fwd, trim_threshold)
 
