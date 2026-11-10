@@ -192,7 +192,7 @@ Usage: `finemo call-hits -r <regions> -m <modisco_h5> -o <out_dir> [-p <peaks>] 
 - `motif_name`: The hit motif name as specified in the provided tfmodisco H5 file.
 - `hit_coefficient`: The regression coefficient for the hit, normalized per peak region.
 - `hit_coefficient_global`: The regression coefficient for the hit, scaled by the overall importance of the region. **This is the primary hit score.**
-- `hit_similarity`: The cosine similarity between the untrimmed CWM and the contribution score of the motif hit.
+- `hit_similarity`: The cosine similarity between the trimmed CWM and the contribution score of the motif hit.
 - `hit_importance`: The total absolute contribution score within the motif hit.
 - `strand`: The orientation of the hit (`+` or `-`).
 - `peak_name`: The name of the peak region containing the hit, taken from the `name` field of the input peak data. `NA` if peak coordinates are not provided.

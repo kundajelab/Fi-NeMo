@@ -584,8 +584,12 @@ def fit_contribs(
 
     if sqrt_transform:
         cwms_tensor = _signed_sqrt(cwms_tensor)
-        cwm_norm = (cwms_tensor**2).sum(dim=(1, 2)).sqrt()
-        cwms_tensor = cwms_tensor / cwm_norm[:, None, None]
+
+    # Unit norm after trimming (and the square root): hit_similarity is then the cosine
+    # similarity between the trimmed CWM and the contributions it covers, and lambda means
+    # the same for every motif, however much of it was trimmed
+    cwm_norm = (cwms_tensor**2).sum(dim=(1, 2)).sqrt()
+    cwms_tensor = cwms_tensor / cwm_norm[:, None, None]
 
     # Initialize batch loader
     if len(contribs_tensor.shape) == 3:
@@ -750,11 +754,13 @@ def fit_contribs(
 
                 # Compute hit scores
                 coef_out = coef[converged, :, :]
-                importance_scale_out_dense = importance_scale_buf[converged, :, :]
-                importance_sq = importance_scale_out_dense ** (-2) - eps
-                xcor_scale = importance_sq.sqrt()
-
                 contribs_converged = contribs_buf[converged, :, :]
+
+                # Squared norm of the contributions under each trimmed motif window, computed
+                # directly: recovering it from importance_scale as scale ** -2 - eps loses
+                # digits in float32 and is wrong wherever the clamp at 10 applies
+                importance_sq = F.conv1d(contribs_converged**2, cwm_trim_mask_tensor)
+                xcor_scale = importance_sq.sqrt()
                 importance_sum_out_dense = F.conv1d(
                     torch.abs(contribs_converged), cwm_trim_mask_tensor
                 )
