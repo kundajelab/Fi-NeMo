@@ -193,6 +193,8 @@ def call_hits(
     mode: str = "pp",
     no_post_filter: bool = False,
     compile_optimizer: bool = False,
+    check_every: int = 5,
+    allow_tf32: Optional[bool] = None,
 ) -> None:
     """Call motif hits using the Fi-NeMo algorithm on preprocessed genomic regions.
 
@@ -249,6 +251,10 @@ def call_hits(
         Contribution type mode ('pp', 'ph', 'hp', 'hh') where 'p'=projected, 'h'=hypothetical.
     no_post_filter : bool, default False
         If True, skip post-hit-calling similarity filtering.
+    check_every : int, default 5
+        Assess convergence every ``check_every`` optimization steps (see hitcaller.fit_contribs).
+    allow_tf32 : bool, optional
+        Whether GPU convolutions may use TF32; None keeps PyTorch's setting.
     compile_optimizer : bool, default False
         Whether to JIT-compile the optimizer for speed.
 
@@ -368,6 +374,8 @@ def call_hits(
         not no_post_filter,
         device_obj,
         compile_optimizer,
+        check_every=check_every,
+        allow_tf32=allow_tf32,
     )
 
     os.makedirs(out_dir, exist_ok=True)
@@ -1129,6 +1137,17 @@ def cli() -> None:
         action="store_true",
         help="JIT-compile the optimizer for faster performance. This may not be supported on older GPUs.",
     )
+    call_hits_parser.add_argument(
+        "--check-every",
+        type=int,
+        default=inspect.signature(call_hits).parameters["check_every"].default,
+        help="Assess convergence every this many optimization steps. Steps in between skip computing the duality gap, about half the cost of a step; a region stops only at a check, so it can run past a momentary dip of its gap below the tolerance.",
+    )
+    call_hits_parser.add_argument(
+        "--no-tf32",
+        action="store_true",
+        help="Do not let GPU convolutions use TF32 (Ampere and newer GPUs). TF32 is faster but rounds convolution inputs, so results differ slightly between GPU types and the convergence check is less exact (in emulation at the default tolerance, up to 1.5 times the tolerance in 12-18%% of regions). Disable it for an exact convergence certificate and results that agree across hardware.",
+    )
 
     report_parser = subparsers.add_parser(
         "report",
@@ -1346,6 +1365,8 @@ def cli() -> None:
             args.mode,
             args.no_post_filter,
             args.compile,
+            args.check_every,
+            False if args.no_tf32 else None,
         )
 
     elif args.cmd == "report":

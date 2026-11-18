@@ -470,7 +470,7 @@ def fit_contribs(
     stall_window: int = 1000,
     stall_improvement: float = 0.01,
     early_restart: bool = True,
-    check_every: int = 1,
+    check_every: int = 5,
     allow_tf32: Optional[bool] = None,
 ) -> Tuple[pl.DataFrame, pl.DataFrame]:
     """Call motif hits by fitting sparse linear model to contribution scores.
@@ -533,17 +533,22 @@ def fit_contribs(
         Restart a region with a smaller step as soon as its objective exceeds that of the empty
         fit (0.5 per bp, since the scores are RMS-normalized) by 0.1%, instead of waiting for the
         divergence to overflow to a non-finite gap.
-    check_every : int, default 1
+    check_every : int, default 5
         Compute the duality gap and assess convergence, divergence, stalls and timeouts only
         every ``check_every`` steps. The steps in between skip the gap's extra convolutions and
-        the transfers from the device; a region stops at most ``check_every - 1`` steps later.
-        ``stall_start`` and ``stall_window`` must be multiples of it.
+        the transfers from the device (about half the cost of a step). A region stops only at a
+        check, so it may run past a momentary dip of its gap below the tolerance; on DNase/ATAC
+        regions 5 took 21% more steps but 1.5 times less time than 1. ``stall_start`` and
+        ``stall_window`` must be multiples of it.
     allow_tf32 : bool, optional
         Whether the convolutions may run in TF32 on GPUs that support it (Ampere and newer).
         TF32 is faster but rounds the inputs of every convolution to a 10-bit mantissa, so
-        results differ slightly between GPU types. None (the default) keeps PyTorch's setting
-        (``torch.backends.cudnn.allow_tf32``, True unless changed); the setting is restored
-        afterwards.
+        results differ slightly between GPU types, and the duality gap is computed less exactly:
+        in emulation at a tolerance of 5e-5 per bp, 12-18% of DNase/ATAC regions stopped with a
+        true gap above the tolerance (at most 1.5 times it), against none in FP32. Use False for
+        an exact certificate and results that agree across hardware. None (the default) keeps
+        PyTorch's setting (``torch.backends.cudnn.allow_tf32``, True unless changed); the
+        setting is restored afterwards.
 
     Returns
     -------
