@@ -300,3 +300,170 @@ def intersect_hits(
         )
 
     return hits_df
+
+
+def motif_alignments(
+    cwms: Float[ndarray, "M 4 W"], trim_masks: Float[ndarray, "M W"]
+) -> tuple:
+    """Best aligned cosine similarity between every ordered pair of trimmed motifs.
+
+    Parameters
+    ----------
+    cwms : Float[ndarray, "M 4 W"]
+        Motif CWMs as call-hits uses them (one row per motif and strand), untrimmed.
+    trim_masks : Float[ndarray, "M W"]
+        Binary trim masks (1 inside each motif's trimmed span).
+
+    Returns
+    -------
+    similarity : Float[ndarray, "M M"]
+        ``similarity[a, b]``: the largest cosine similarity between trimmed motifs ``a`` and ``b``
+        over all relative positions, with both trimmed CWMs at unit norm (so a partial overlap
+        counts only the overlapping part).
+    shift : Int[ndarray, "M M"]
+        ``shift[a, b]``: the offset at that maximum, as the untrimmed start of ``b`` minus the
+        untrimmed start of ``a``.
+    """
+    import torch
+    import torch.nn.functional as F
+
+    X = torch.as_tensor(np.asarray(cwms) * np.asarray(trim_masks)[:, None, :], dtype=torch.float64)
+    W = X.shape[2]
+    norms = X.flatten(1).norm(dim=1).clamp(min=1e-300)
+    # out[a, b, tau] = sum_x X[a, :, x + tau - (W - 1)] . X[b, :, x]: b starts tau - (W - 1) after a
+    out = F.conv1d(F.pad(X, (W - 1, W - 1)), X)
+    cos = out / (norms[:, None, None] * norms[None, :, None])
+    best = cos.max(dim=2)
+    return best.values.numpy(), (best.indices - (W - 1)).numpy().astype(np.int32)
+
+
+@njit(cache=True)
+def _merge_sweep(groups, starts, motif_ids, ok, shift, max_shift, reach):
+    """Union placements of similar motifs at the expected offset; inputs sorted by (group, start)."""
+    n = groups.shape[0]
+    parent = np.arange(n)
+    for i in range(n):
+        j = i + 1
+        while j < n and groups[j] == groups[i] and starts[j] - starts[i] <= reach:
+            a = motif_ids[i]
+            b = motif_ids[j]
+            if a != b and ok[a, b] and abs(starts[j] - starts[i] - shift[a, b]) <= max_shift:
+                ri = i
+                while parent[ri] != ri:
+                    ri = parent[ri]
+                rj = j
+                while parent[rj] != rj:
+                    rj = parent[rj]
+                if ri != rj:
+                    parent[max(ri, rj)] = min(ri, rj)
+            j += 1
+    for i in range(n):
+        r = i
+        while parent[r] != r:
+            r = parent[r]
+        parent[i] = r
+    return parent
+
+
+def merge_sites(
+    hits_df: Union[pl.DataFrame, pl.LazyFrame],
+    motifs_df: pl.DataFrame,
+    cwms: Float[ndarray, "M 4 W"],
+    min_cosine: float = 0.9,
+    max_shift: int = 1,
+) -> pl.DataFrame:
+    """Merge placements that describe the same site into one site per group.
+
+    The optimizer can split one site's weight over two placements that explain it almost
+    equally well: the two strands of a palindromic motif, or two nearly identical motifs.
+    Placements in the same region are merged when their motifs' trimmed CWMs have an aligned
+    cosine similarity of at least ``min_cosine`` and the placements sit at that alignment's
+    offset, within ``max_shift`` bp; merging is transitive. Unlike ``collapse_hits``, which keeps
+    the best placement, the merged site keeps the summed coefficient.
+
+    Parameters
+    ----------
+    hits_df : Union[pl.DataFrame, pl.LazyFrame]
+        Hits from call-hits (``hits.tsv``).
+    motifs_df : pl.DataFrame
+        ``motif_data.tsv`` of the same run (motif_id, motif_name, strand, motif_start, motif_end).
+    cwms : Float[ndarray, "M 4 W"]
+        ``motif_cwms.npy`` of the same run.
+    min_cosine : float, default 0.9
+        Minimum aligned cosine similarity between two motifs for their placements to merge.
+    max_shift : int, default 1
+        Tolerance in bp on the offset between two placements.
+
+    Returns
+    -------
+    pl.DataFrame
+        One row per site: chr, start, end (union of the members' trimmed spans), motif_name and
+        strand of the member with the largest coefficient, site_coefficient and
+        site_coefficient_global (sums over members), site_similarity (largest member similarity),
+        n_placements, placements (``motif(strand)@start:coefficient`` for each member), peak_name
+        and peak_id.
+    """
+    if isinstance(hits_df, pl.LazyFrame):
+        hits_df = hits_df.collect()
+
+    M, _, W = cwms.shape
+    trim_masks = np.zeros((M, W), dtype=np.float64)
+    ids = motifs_df["motif_id"].to_numpy()
+    for k, s, e in zip(ids, motifs_df["motif_start"].to_numpy(), motifs_df["motif_end"].to_numpy()):
+        trim_masks[k, s:e] = 1
+    similarity, shift = motif_alignments(cwms, trim_masks)
+    ok = similarity >= min_cosine
+
+    key = motifs_df.select(
+        pl.col("motif_name"), pl.col("strand"), pl.col("motif_id").cast(pl.Int32)
+    )
+    df = (
+        hits_df.drop("count", strict=False)
+        .join(key, on=["motif_name", "strand"], how="left")
+        .sort(["peak_id", "start_untrimmed"], maintain_order=True)
+    )
+    if df["motif_id"].null_count():
+        raise ValueError("Hits contain motifs that are not in the motif table")
+
+    parent = _merge_sweep(
+        df["peak_id"].to_numpy().astype(np.int64),
+        df["start_untrimmed"].to_numpy().astype(np.int64),
+        df["motif_id"].to_numpy().astype(np.int64),
+        ok,
+        shift.astype(np.int64),
+        int(max_shift),
+        int(W - 1 + max_shift),
+    )
+
+    member = pl.concat_str(
+        [
+            pl.col("motif_name"),
+            pl.lit("("),
+            pl.col("strand"),
+            pl.lit(")@"),
+            pl.col("start").cast(pl.String),
+            pl.lit(":"),
+            pl.col("hit_coefficient").round(4).cast(pl.String),
+        ]
+    )
+    by_coef = dict(by="hit_coefficient", descending=True)
+    sites = (
+        df.with_columns(site=pl.Series(parent), member=member)
+        .group_by("site", maintain_order=True)
+        .agg(
+            chr=pl.col("chr").first(),
+            start=pl.col("start").min(),
+            end=pl.col("end").max(),
+            motif_name=pl.col("motif_name").sort_by(**by_coef).first(),
+            strand=pl.col("strand").sort_by(**by_coef).first(),
+            site_coefficient=pl.col("hit_coefficient").sum(),
+            site_coefficient_global=pl.col("hit_coefficient_global").sum(),
+            site_similarity=pl.col("hit_similarity").max(),
+            n_placements=pl.len().cast(pl.UInt32),
+            placements=pl.col("member").sort_by(**by_coef).str.join(";"),
+            peak_name=pl.col("peak_name").first(),
+            peak_id=pl.col("peak_id").first(),
+        )
+        .drop("site")
+    )
+    return sites

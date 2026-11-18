@@ -670,6 +670,36 @@ def collapse_hits(hits_path: str, out_path: str, overlap_frac: float = 0.2) -> N
     )
 
 
+def merge_sites(
+    hits_dir: str, out_path: str, min_cosine: float = 0.9, max_shift: int = 1
+) -> None:
+    """Merge placements that describe the same site, summing their coefficients.
+
+    The two strands of a palindromic motif, or two nearly identical motifs, can share one
+    site's weight. Placements in the same region whose trimmed motifs have an aligned cosine
+    similarity of at least ``min_cosine`` and that sit at that alignment's offset (within
+    ``max_shift`` bp) become one site, labelled by the member with the largest coefficient.
+
+    Parameters
+    ----------
+    hits_dir : str
+        Output directory of ``call-hits`` (hits.tsv, motif_data.tsv, motif_cwms.npy).
+    out_path : str
+        Path to the output .tsv file, one row per site.
+    min_cosine : float, default 0.9
+        Minimum aligned cosine similarity between two trimmed motifs.
+    max_shift : int, default 1
+        Tolerance in bp on the offset between two placements.
+    """
+    from . import postprocessing
+
+    hits_df = data_io.load_hits(os.path.join(hits_dir, "hits.tsv"), lazy=False)
+    motifs_df, _ = data_io.load_motifs_df(os.path.join(hits_dir, "motif_data.tsv"))
+    cwms = data_io.load_motif_cwms(os.path.join(hits_dir, "motif_cwms.npy"))
+    sites = postprocessing.merge_sites(hits_df, motifs_df, cwms, min_cosine, max_shift)
+    sites.write_csv(out_path, separator="\t")
+
+
 def intersect_hits(hits_paths: List[str], out_path: str, relaxed: bool = False) -> None:
     """Find intersection of hits across multiple Fi-NeMo runs.
 
@@ -1288,6 +1318,40 @@ def cli() -> None:
         help="The threshold for determining overlapping hits. For two hits with lengths x and y, the minimum overlap is defined as `overlap_frac * (x + y) / 2`. The default value of 0.2 means that two hits must overlap by at least 20% of their average lengths to be considered overlapping.",
     )
 
+    merge_sites_parser = subparsers.add_parser(
+        "merge-sites",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        help="Merge placements of near-identical motifs (or both strands of a palindrome) at one site.",
+    )
+    merge_sites_parser.add_argument(
+        "-H",
+        "--hits",
+        type=str,
+        required=True,
+        help="The output directory of `call-hits` (with hits.tsv, motif_data.tsv and motif_cwms.npy).",
+    )
+    merge_sites_parser.add_argument(
+        "-o",
+        "--out-path",
+        type=str,
+        required=True,
+        help="The path to the output .tsv file, one row per site with the summed coefficient of its placements.",
+    )
+    merge_sites_parser.add_argument(
+        "-c",
+        "--min-cosine",
+        type=float,
+        default=inspect.signature(merge_sites).parameters["min_cosine"].default,
+        help="The minimum cosine similarity between two trimmed motifs, at their best alignment, for their placements to merge.",
+    )
+    merge_sites_parser.add_argument(
+        "-s",
+        "--max-shift",
+        type=int,
+        default=inspect.signature(merge_sites).parameters["max_shift"].default,
+        help="The tolerance in bp on the offset between two placements, relative to the motifs' best alignment.",
+    )
+
     intersect_hits_parser = subparsers.add_parser(
         "intersect-hits",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -1414,6 +1478,9 @@ def cli() -> None:
 
     elif args.cmd == "collapse-hits":
         collapse_hits(args.hits, args.out_path, args.overlap_frac)
+
+    elif args.cmd == "merge-sites":
+        merge_sites(args.hits, args.out_path, args.min_cosine, args.max_shift)
 
     elif args.cmd == "intersect-hits":
         intersect_hits(args.hits, args.out_path, args.relaxed)

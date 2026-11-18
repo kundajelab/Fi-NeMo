@@ -58,6 +58,18 @@ def test_occurrences_include_regions_without_hits():
     assert co.shape == (3, 3)
 
 
+def test_merge_sites_on_call_hits_output(inputs):
+    prob, h5, tmp = inputs
+    regions = str(tmp / "regions.npz")
+    data_io.write_regions_npz(prob["sequences"], prob["contribs"], regions)
+    hits, _, _ = _call(regions, h5, tmp / "out")
+    main.merge_sites(str(tmp / "out"), str(tmp / "sites.tsv"))
+    sites = pl.read_csv(tmp / "sites.tsv", separator="\t")
+    assert 0 < sites.height <= hits.height
+    assert sites["site_coefficient"].sum() == pytest.approx(hits["hit_coefficient"].sum(), rel=1e-4)
+    assert sites["n_placements"].sum() == hits.height
+
+
 def test_call_hits_lambda_grid_writes_one_output_per_lambda(inputs):
     prob, h5, tmp = inputs
     regions = str(tmp / "regions.npz")
