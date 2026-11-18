@@ -81,7 +81,7 @@ def test_all_negative_region_stops_at_once(cpu):
     prob["contribs"] = -np.abs(prob["contribs"])
     hits, qc = hitcaller.fit_contribs(
         prob["cwms"], prob["contribs"], prob["sequences"], prob["mask"], False, prob["lambdas"],
-        max_steps=500, device=cpu, batch_size=2,
+        max_steps=500, device=cpu, batch_size=2, check_every=1,
     )
     assert hits.height == 0
     assert (qc["num_steps"].to_numpy() <= 2).all()
@@ -183,6 +183,7 @@ def test_max_steps_counts_restarts(problem, cpu):
     _, qc = hitcaller.fit_contribs(
         problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False,
         problem["lambdas"], step_size_max=60.0, max_steps=30, convergence_tol=1e-12, device=cpu, batch_size=4,
+        check_every=1,
     )
     assert (qc["num_steps_total"].to_numpy() <= 31).all()
 

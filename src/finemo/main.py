@@ -196,7 +196,7 @@ def call_hits(
     no_post_filter: bool = False,
     compile_optimizer: bool = False,
     lambda_grid: Optional[List[float]] = None,
-    check_every: int = 1,
+    check_every: int = 5,
     allow_tf32: Optional[bool] = None,
 ) -> None:
     """Call motif hits using the Fi-NeMo algorithm on preprocessed genomic regions.
@@ -258,8 +258,8 @@ def call_hits(
         Several global lambdas solved in one run, in decreasing order, each warm-started from the
         previous one's solution. The outputs for each go to ``out_dir/lambda_<value>/``, each laid
         out as a single-lambda run. Cannot be combined with ``motif_lambdas_path``.
-    check_every : int, default 1
-        Assess convergence every ``check_every`` optimization steps.
+    check_every : int, default 5
+        Assess convergence every ``check_every`` optimization steps (see hitcaller.fit_contribs).
     allow_tf32 : bool, optional
         Whether GPU convolutions may use TF32; None keeps PyTorch's setting.
     compile_optimizer : bool, default False
@@ -1198,12 +1198,12 @@ def cli() -> None:
         "--check-every",
         type=int,
         default=inspect.signature(call_hits).parameters["check_every"].default,
-        help="Assess convergence every this many optimization steps. Steps in between skip computing the duality gap; a region stops at most this many steps minus one later.",
+        help="Assess convergence every this many optimization steps. Steps in between skip computing the duality gap, about half the cost of a step; a region stops only at a check, so it can run past a momentary dip of its gap below the tolerance.",
     )
     call_hits_parser.add_argument(
         "--no-tf32",
         action="store_true",
-        help="Do not let GPU convolutions use TF32 (Ampere and newer GPUs). TF32 is faster but rounds convolution inputs, so results differ slightly between GPU types; disable it for results that agree across hardware.",
+        help="Do not let GPU convolutions use TF32 (Ampere and newer GPUs). TF32 is faster but rounds convolution inputs, so results differ slightly between GPU types and the convergence check is less exact (in emulation at the default tolerance, up to 1.5 times the tolerance in 12-18%% of regions). Disable it for an exact convergence certificate and results that agree across hardware.",
     )
 
     report_parser = subparsers.add_parser(
