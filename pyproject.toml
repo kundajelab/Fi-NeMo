@@ -29,6 +29,9 @@ dependencies = [
     "jaxtyping"
 ]
 
+[project.optional-dependencies]
+test = ["pytest"]
+
 [project.scripts]
 finemo = "finemo.main:cli"
 
@@ -41,3 +44,7 @@ finemo = ["templates/*.html"]
 
 [tool.ruff]
 ignore = ["F722"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

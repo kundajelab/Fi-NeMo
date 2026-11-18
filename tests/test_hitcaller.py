@@ -1,0 +1,128 @@
+"""Tests of the optimizer: the convergence certificate, the optimum it reaches, and the fitting loop."""
+
+import os
+
+import numpy as np
+import pytest
+import torch
+
+from finemo import hitcaller
+
+from conftest import Reference, dense_coefficients, synthetic_problem
+
+
+def _tensors(prob, ref):
+    f = torch.float32
+    return {
+        "importance_scale": ref.s.to(f),
+        "cwms": ref.W.to(f),
+        "contribs": ref.X.to(f),
+        "sequences": ref.seq.to(f),
+        "lambdas": ref.lam.to(f),
+    }
+
+
+def test_prox_grad_step_returns_the_valid_duality_gap(problem):
+    """The gap must be the duality gap at the returned (saved) coefficients, not at the momentum point."""
+    ref = Reference(problem)
+    t = _tensors(problem, ref)
+    rng = np.random.default_rng(1)
+    z = rng.normal(0.0, 0.5, ref.shape) * (rng.random(ref.shape) < 0.02)  # sparse, with negative entries
+    c_next, gap, nll = hitcaller.prox_grad_step(
+        torch.as_tensor(z, dtype=torch.float32), t["importance_scale"], t["cwms"], t["contribs"],
+        t["sequences"], t["lambdas"], torch.full((ref.shape[0], 1, 1), 0.5),
+    )
+    assert (c_next >= 0).all()
+    P, G = ref.objective_and_gap(c_next.double())
+    np.testing.assert_allclose(gap.numpy() / ref.L, G, rtol=1e-4, atol=1e-6)
+    assert (gap.numpy() >= -1e-6).all()
+    r = ref.X - ref.A(c_next.double())
+    np.testing.assert_allclose(nll.numpy(), (r**2).sum(dim=(1, 2)).numpy(), rtol=1e-4)
+
+
+def test_gap_is_one_when_every_correlation_is_negative():
+    """t must be 1, not 1/q, when max(A'r / lambda) < 0 (an all-negative region: c = 0 is optimal)."""
+    prob = synthetic_problem(seed=2, n=2)
+    prob["cwms"] = np.abs(prob["cwms"])
+    prob["contribs"] = -np.abs(prob["contribs"])
+    ref = Reference(prob)
+    t = _tensors(prob, ref)
+    c_next, gap, _ = hitcaller.prox_grad_step(
+        torch.zeros(ref.shape), t["importance_scale"], t["cwms"], t["contribs"], t["sequences"],
+        t["lambdas"], torch.full((ref.shape[0], 1, 1), 1.0),
+    )
+    assert float(c_next.abs().max()) == 0.0
+    np.testing.assert_allclose(gap.numpy(), 0.0, atol=1e-5)
+
+
+@pytest.mark.parametrize("use_hypothetical", [False, True])
+def test_fit_reaches_the_reference_optimum(problem, cpu, use_hypothetical):
+    """At convergence the objective is within the tolerance of a float64 reference optimum."""
+    tol = 1e-5
+    ref = Reference(problem, use_hypothetical=use_hypothetical)
+    _, P_star = ref.solve()
+    hits, qc = hitcaller.fit_contribs(
+        problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], use_hypothetical,
+        problem["lambdas"], convergence_tol=tol, post_filter=False, device=cpu, batch_size=4,
+    )
+    c = dense_coefficients(hits, ref.shape)
+    P, G = ref.objective_and_gap(c)
+    qc = qc.sort("peak_id")
+    assert (P - P_star <= tol + 1e-6).all(), P - P_star
+    assert (qc["dual_gap"].to_numpy() <= tol).all()
+    # the reported gap is a valid bound: it is the gap of the coefficients that were saved
+    np.testing.assert_allclose(qc["dual_gap"].to_numpy(), G, rtol=1e-3, atol=1e-6)
+
+
+def test_all_negative_region_stops_at_once(cpu):
+    prob = synthetic_problem(seed=3, n=2)
+    prob["cwms"] = np.abs(prob["cwms"])
+    prob["contribs"] = -np.abs(prob["contribs"])
+    hits, qc = hitcaller.fit_contribs(
+        prob["cwms"], prob["contribs"], prob["sequences"], prob["mask"], False, prob["lambdas"],
+        max_steps=500, device=cpu, batch_size=2,
+    )
+    assert hits.height == 0
+    assert (qc["num_steps"].to_numpy() <= 2).all()
+
+
+def test_compile_optimizer_does_not_rebind_the_module_function(problem, cpu, monkeypatch):
+    calls = []
+
+    def fake_compile(fn, **kwargs):
+        calls.append(fn)
+        return lambda *args, **kw: fn(*args, **kw)  # a distinct object, as torch.compile returns
+
+    monkeypatch.setattr(torch, "compile", fake_compile)
+    original = hitcaller.optimizer_step
+    hitcaller.fit_contribs(
+        problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False,
+        problem["lambdas"], max_steps=20, device=cpu, compile_optimizer=True, batch_size=4,
+    )
+    assert calls and hitcaller.optimizer_step is original
+
+
+FIXTURE = os.environ.get("FINEMO_TEST_FIXTURE")
+
+
+@pytest.mark.skipif(not FIXTURE, reason="set FINEMO_TEST_FIXTURE to the SPI1 ENCSR000BGQ region 24734 fixture")
+def test_spi1_region_that_stopped_early(cpu):
+    """The region where Fi-NeMo 0.30/0.41 stopped at 3.3x the optimum (249 placements against 6)."""
+    import polars as pl
+
+    from finemo import data_io
+
+    seqs, con, _, _ = data_io.load_regions_npz(os.path.join(FIXTURE, "region_spi1_bgq_24734.npz"))
+    cwms = np.load(os.path.join(FIXTURE, "motif_cwms.npy")).astype(np.float32)
+    md = pl.read_csv(os.path.join(FIXTURE, "motif_data.tsv"), separator="\t").sort("motif_id")
+    mask = np.zeros(cwms.shape[::2], np.float32)
+    for r in md.iter_rows(named=True):
+        mask[r["motif_id"], r["motif_start"] : r["motif_end"]] = 1
+    prob = {"cwms": cwms, "mask": mask, "sequences": seqs, "contribs": con,
+            "lambdas": md["lambda"].to_numpy().astype(np.float32)}
+    ref = Reference(prob)
+    hits, qc = hitcaller.fit_contribs(cwms, con, seqs, mask, False, prob["lambdas"], post_filter=False,
+                                      device=cpu, batch_size=1)
+    P, _ = ref.objective_and_gap(dense_coefficients(hits, ref.shape))
+    assert P[0] - 0.4702005 <= 5e-5 + 1e-6  # float64 optimum of this problem (unit-norm trimmed CWMs)
+    assert hits.height == 8
