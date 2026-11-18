@@ -238,7 +238,7 @@ def call_hits(
     convergence_tol : float, default 0.00005
         Convergence tolerance for duality gap.
     max_steps : int, default 10000
-        Maximum number of optimization steps.
+        Maximum number of optimization steps per region, restarts included.
     batch_size : int, default 2000
         Batch size for GPU processing.
     step_adjust : float, default 0.7
@@ -1107,7 +1107,7 @@ def cli() -> None:
         "--max-steps",
         type=int,
         default=inspect.signature(call_hits).parameters["max_steps"].default,
-        help="The maximum number of optimization steps.",
+        help="The maximum number of optimization steps per region, restarts included.",
     )
     call_hits_parser.add_argument(
         "-b",

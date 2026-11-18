@@ -439,6 +439,9 @@ def fit_contribs(
     device: Optional[torch.device] = None,
     compile_optimizer: bool = False,
     eps: float = 1.0,
+    stall_start: int = 2000,
+    stall_window: int = 1000,
+    stall_improvement: float = 0.01,
 ) -> Tuple[pl.DataFrame, pl.DataFrame]:
     """Call motif hits by fitting sparse linear model to contribution scores.
 
@@ -477,7 +480,7 @@ def fit_contribs(
     convergence_tol : float, default 0.00005
         Convergence tolerance based on duality gap.
     max_steps : int, default 10000
-        Maximum number of optimization steps.
+        Maximum number of optimization steps per region, restarts included.
     batch_size : int, default 2000
         Number of regions to process simultaneously.
     step_adjust : float, default 0.7
@@ -490,6 +493,12 @@ def fit_contribs(
         Whether to JIT compile the optimizer for speed.
     eps : float, default 1.0
         Small constant for numerical stability.
+    stall_start, stall_window, stall_improvement : int, int, float, default 2000, 1000, 0.01
+        Stall safeguard. The fixed-step momentum iteration can cycle in a few regions without
+        converging or diverging. After ``stall_start`` steps, at the end of every ``stall_window``
+        steps, a region whose best duality gap over the window improves by less than the fraction
+        ``stall_improvement`` on the window before has its step size multiplied by ``step_adjust``
+        and its momentum reset.
 
     Returns
     -------
@@ -510,6 +519,7 @@ def fit_contribs(
         - num_steps: Number of optimization steps since the last restart
         - num_steps_total: Number of optimization steps, restarts included
         - num_restarts: Number of restarts after a non-finite duality gap
+        - num_step_reductions: Number of step size reductions by the stall safeguard
         - num_filtered: Number of placements removed by the similarity post-filter
         - step_size: Final step size
         - global_scale: Region-level scaling factor
@@ -626,6 +636,7 @@ def fit_contribs(
         "num_steps": [],
         "num_steps_total": [],
         "num_restarts": [],
+        "num_step_reductions": [],
         "num_filtered": [],
         "step_size": [],
         "global_scale": [],
@@ -642,6 +653,10 @@ def fit_contribs(
     # Steps since the region was loaded, restarts included (i restarts at 0 after each)
     n_total: Int[Tensor, " B"] = torch.zeros((B,), dtype=torch.int, device=device)
     n_restarts: Int[Tensor, " B"] = torch.zeros((B,), dtype=torch.int, device=device)
+    # Stall safeguard: best gap in the current window and in the window before
+    n_reductions: Int[Tensor, " B"] = torch.zeros((B,), dtype=torch.int, device=device)
+    gap_min: Float[Tensor, " B"] = torch.full((B,), float("inf"), device=device)
+    gap_ref: Float[Tensor, " B"] = torch.full((B,), float("inf"), device=device)
     step_sizes: Float[Tensor, "B 1 1"] = torch.full(
         (B, 1, 1), step_size_max, dtype=torch.float32, device=device
     )
@@ -713,6 +728,9 @@ def fit_contribs(
                 i[converged] = 0
                 n_total[converged] = 0
                 n_restarts[converged] = 0
+                n_reductions[converged] = 0
+                gap_min[converged] = float("inf")
+                gap_ref[converged] = float("inf")
 
                 step_sizes[converged] = step_size_max
 
@@ -742,7 +760,24 @@ def fit_contribs(
             n_restarts += diverged.int()
             step_sizes[diverged, :, :] *= step_adjust
 
-            timeouts = (i > max_steps).squeeze() & active
+            # Stall safeguard: reduce the step and drop the momentum of regions whose best gap over the
+            # last stall_window steps improved by less than stall_improvement on the window before
+            finite = active & torch.isfinite(gap)
+            gap_min = torch.where(finite, torch.minimum(gap_min, gap), gap_min)
+            boundary = active & (n_total % stall_window == 0)
+            stalled = (
+                boundary
+                & (n_total >= stall_start)
+                & (gap_min > (1 - stall_improvement) * gap_ref)
+            )
+            step_sizes[stalled, :, :] *= step_adjust
+            coef_inter[stalled, :, :] = coef[stalled, :, :]
+            i[stalled] = 0
+            n_reductions += stalled.int()
+            gap_ref = torch.where(boundary, gap_min, gap_ref)
+            gap_min = torch.where(boundary, torch.full_like(gap_min, float("inf")), gap_min)
+
+            timeouts = (n_total > max_steps) & active
             if timeouts.sum().item() > 0:
                 timeout_inds = inds_buf[timeouts]
                 for ind in timeout_inds:
@@ -821,6 +856,7 @@ def fit_contribs(
                 qc_lsts["num_steps"].append(step_out.numpy(force=True))
                 qc_lsts["num_steps_total"].append(n_total[converged].numpy(force=True))
                 qc_lsts["num_restarts"].append(n_restarts[converged].numpy(force=True))
+                qc_lsts["num_step_reductions"].append(n_reductions[converged].numpy(force=True))
                 qc_lsts["num_filtered"].append(filtered_out.numpy(force=True))
                 qc_lsts["global_scale"].append(global_scale_out.numpy(force=True))
                 qc_lsts["step_size"].append(step_sizes_out.numpy(force=True))

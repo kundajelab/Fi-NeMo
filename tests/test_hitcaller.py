@@ -151,3 +151,37 @@ def test_qc_counts_placements_removed_by_the_post_filter(problem, cpu):
     counts = qc_on.select("peak_id", "num_filtered").join(n_off, on="peak_id", how="left").join(
         n_on, on="peak_id", how="left").fill_null(0)
     assert (counts["num_filtered"] == counts["off"] - counts["on"]).all()
+
+
+def test_stall_safeguard_keeps_the_optimum(problem, cpu):
+    """Forced reductions (every 10 steps after 20) still converge to the optimum, and are counted."""
+    tol = 1e-5
+    ref = Reference(problem)
+    _, P_star = ref.solve()
+    hits, qc = hitcaller.fit_contribs(
+        problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False,
+        problem["lambdas"], convergence_tol=tol, post_filter=False, device=cpu, batch_size=4,
+        stall_start=20, stall_window=10, stall_improvement=1.0,
+    )
+    qc = qc.sort("peak_id")
+    slow = qc["num_steps_total"].to_numpy() > 20
+    assert slow.any() and (qc["num_step_reductions"].to_numpy()[slow] > 0).all()
+    P, _ = ref.objective_and_gap(dense_coefficients(hits, ref.shape))
+    assert (P - P_star <= tol + 1e-6).all()
+
+
+def test_stall_safeguard_is_idle_on_converging_regions(problem, cpu):
+    _, qc = hitcaller.fit_contribs(
+        problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False,
+        problem["lambdas"], device=cpu, batch_size=4,
+    )
+    assert (qc["num_step_reductions"].to_numpy() == 0).all()
+
+
+def test_max_steps_counts_restarts(problem, cpu):
+    """The step budget is per region, restarts included, so restarts cannot extend it."""
+    _, qc = hitcaller.fit_contribs(
+        problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False,
+        problem["lambdas"], step_size_max=60.0, max_steps=30, convergence_tol=1e-12, device=cpu, batch_size=4,
+    )
+    assert (qc["num_steps_total"].to_numpy() <= 31).all()
