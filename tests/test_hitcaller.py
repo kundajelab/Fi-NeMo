@@ -185,3 +185,26 @@ def test_max_steps_counts_restarts(problem, cpu):
         problem["lambdas"], step_size_max=60.0, max_steps=30, convergence_tol=1e-12, device=cpu, batch_size=4,
     )
     assert (qc["num_steps_total"].to_numpy() <= 31).all()
+
+
+def test_early_restart_catches_divergence_before_overflow(problem, cpu):
+    """With a step far too large, restarting once the fit is worse than empty saves the steps spent overflowing."""
+    tol = 1e-5
+    args = (problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False, problem["lambdas"])
+    ref = Reference(problem)
+    _, P_star = ref.solve()
+    qcs = {}
+    for step in (3.0, 60.0):
+        for early in (False, True):
+            hits, qc = hitcaller.fit_contribs(*args, step_size_max=step, convergence_tol=tol, post_filter=False,
+                                              device=cpu, batch_size=4, early_restart=early)
+            P, _ = ref.objective_and_gap(dense_coefficients(hits, ref.shape))
+            assert (P - P_star <= tol + 1e-6).all()
+            qcs[step, early] = qc.sort("peak_id")
+    # at the default step nothing diverges and the rule never fires
+    assert qcs[3.0, True]["num_steps_total"].to_list() == qcs[3.0, False]["num_steps_total"].to_list()
+    # at a step far too large it restarts the same regions as often, but sooner
+    late, early = qcs[60.0, False], qcs[60.0, True]
+    assert (late["num_restarts"].to_numpy() > 0).any()
+    assert early["num_restarts"].to_list() == late["num_restarts"].to_list()
+    assert early["num_steps_total"].sum() < late["num_steps_total"].sum()
