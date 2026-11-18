@@ -454,7 +454,7 @@ def fit_contribs(
     sequences: Int[ndarray, "N 4 L"],
     cwm_trim_mask: Float[ndarray, "M W"],
     use_hypothetical: bool,
-    lambdas: Float[ndarray, " M"],
+    lambdas: Union[Float[ndarray, " M"], Float[ndarray, "K M"]],
     step_size_max: float = 3.0,
     step_size_min: float = 0.08,
     sqrt_transform: bool = False,
@@ -499,8 +499,12 @@ def fit_contribs(
     use_hypothetical : bool
         Whether to use hypothetical contribution scores (True) or
         projected scores (False).
-    lambdas : Float[ndarray, " M"]
-        L1 regularization weights for each motif (shape: num_motifs).
+    lambdas : Float[ndarray, " M"] | Float[ndarray, "K M"]
+        L1 regularization weights for each motif (shape: num_motifs), or a grid of K settings
+        (shape: K × num_motifs). With a grid, each region is solved for every row in order, each
+        fit starting from the previous row's solution; give the rows in decreasing order of
+        lambda, so that each warm start is close. hits_df and qc_df then gain a lambda_index
+        column (the row).
     step_size_max : float, default 3.0
         Maximum optimization step size.
     step_size_min : float, default 0.08
@@ -627,9 +631,13 @@ def fit_contribs(
     contribs_tensor: torch.Tensor = torch.from_numpy(contribs)
     sequences_tensor: torch.Tensor = torch.from_numpy(sequences)
     cwm_trim_mask_tensor = torch.from_numpy(cwm_trim_mask)[:, None, :].repeat(1, 4, 1)
-    lambdas_tensor: torch.Tensor = torch.from_numpy(lambdas)[None, :, None].to(
-        device=device, dtype=torch.float32
-    )
+    lambda_grid = np.asarray(lambdas, dtype=np.float32)
+    if lambda_grid.ndim == 1:
+        lambda_grid = lambda_grid[None, :]
+    if lambda_grid.ndim != 2 or lambda_grid.shape[1] != M:
+        raise ValueError(f"lambdas must have shape (M,) or (K, M) with M = {M}, got {np.shape(lambdas)}")
+    K = lambda_grid.shape[0]
+    lambda_grid_tensor = torch.from_numpy(lambda_grid).to(device=device)  # (K, M)
 
     # Convert to channel-last layout for optimized convolution operations
     cwms_tensor = _to_channel_last_layout(
@@ -687,6 +695,9 @@ def fit_contribs(
         "global_scale": [],
         "peak_id": [],
     }
+    if K > 1:
+        qc_lsts["lambda_index"] = []
+    lambda_index_lst: List[ndarray] = []
 
     # Initialize buffers for optimizer
     coef_inter: Float[Tensor, "B M P"] = torch.zeros(
@@ -705,7 +716,11 @@ def fit_contribs(
     step_sizes: Float[Tensor, "B 1 1"] = torch.full(
         (B, 1, 1), step_size_max, dtype=torch.float32, device=device
     )
+    # Row of the lambda grid each region is being solved for, and its lambdas
+    lam_idx: Int[Tensor, " B"] = torch.zeros((B,), dtype=torch.long, device=device)
+    lam_buf: Float[Tensor, "B M 1"] = lambda_grid_tensor[lam_idx][:, :, None].contiguous()
 
+    # Regions done with every lambda: their slots are refilled with new regions
     converged: Bool[Tensor, " B"] = torch.full(
         (B,), True, dtype=torch.bool, device=device
     )
@@ -783,6 +798,8 @@ def fit_contribs(
                 n_reductions[converged] = 0
                 gap_min[converged] = float("inf")
                 gap_ref[converged] = float("inf")
+                lam_idx[converged] = 0
+                lam_buf[converged] = lambda_grid_tensor[0][:, None]
 
                 step_sizes[converged] = step_size_max
 
@@ -799,7 +816,7 @@ def fit_contribs(
                 i,
                 step_sizes,
                 L,
-                lambdas_tensor,
+                lam_buf,
                 check,
             )
             i += 1
@@ -814,7 +831,7 @@ def fit_contribs(
             diverged = ~torch.isfinite(gap)
             if early_restart:
                 # The empty fit scores 0.5 per bp; a fit above it is diverging (or overshooting)
-                objective = nll + (coef * lambdas_tensor).sum(dim=(1, 2)) / L
+                objective = nll + (coef * lam_buf).sum(dim=(1, 2)) / L
                 diverged |= objective > 0.5 * (1 + 1e-3)
             diverged &= active
             coef_inter[diverged, :, :] = 0.0
@@ -855,17 +872,22 @@ def fit_contribs(
                 for ind in fail_inds:
                     warnings.warn(f"Optimizer failed for region {ind}.", RuntimeWarning)
 
+            # Regions done with their current lambda; those at the last lambda are retired
             converged = ((gap <= convergence_tol) | timeouts | fails) & active
+            finished = converged
+            num_finished = finished.sum().item()
+            if K > 1:
+                converged = finished & (lam_idx == K - 1)
             num_load = converged.sum().item()
 
             # Extract hits from converged peaks
-            if num_load > 0:
-                inds_out = inds_buf[converged]
-                global_scale_out = global_scale_buf[converged]
+            if num_finished > 0:
+                inds_out = inds_buf[finished]
+                global_scale_out = global_scale_buf[finished]
 
                 # Compute hit scores
-                coef_out = coef[converged, :, :]
-                contribs_converged = contribs_buf[converged, :, :]
+                coef_out = coef[finished, :, :]
+                contribs_converged = contribs_buf[finished, :, :]
 
                 # Squared norm of the contributions under each trimmed motif window, computed
                 # directly: recovering it from importance_scale as scale ** -2 - eps loses
@@ -882,7 +904,7 @@ def fit_contribs(
                 # Placements the similarity filter removes: many in a region flag a poor fit
                 num_placed = (coef_out > 0).sum(dim=(1, 2))
                 if post_filter:
-                    coef_out = coef_out * (xcor_out_dense >= lambdas_tensor)
+                    coef_out = coef_out * (xcor_out_dense >= lam_buf[finished])
                 filtered_out = num_placed - (coef_out > 0).sum(dim=(1, 2))
 
                 # Extract hit coordinates using sparse tensor representation
@@ -903,10 +925,10 @@ def fit_contribs(
                 scores_out_raw = coef_out.values()
 
                 # Store outputs
-                gap_out = gap[converged]
-                nll_out = nll[converged]
-                step_out = i[converged, 0, 0]
-                step_sizes_out = step_sizes[converged, 0, 0]
+                gap_out = gap[finished]
+                nll_out = nll[finished]
+                step_out = i[finished, 0, 0]
+                step_sizes_out = step_sizes[finished, 0, 0]
 
                 hit_idxs_lst.append(hit_idxs_out.numpy(force=True).T)
                 coefficients_lst.append(scores_out_raw.numpy(force=True))
@@ -917,13 +939,36 @@ def fit_contribs(
                 qc_lsts["nll"].append(nll_out.numpy(force=True))
                 qc_lsts["dual_gap"].append(gap_out.numpy(force=True))
                 qc_lsts["num_steps"].append(step_out.numpy(force=True))
-                qc_lsts["num_steps_total"].append(n_total[converged].numpy(force=True))
-                qc_lsts["num_restarts"].append(n_restarts[converged].numpy(force=True))
-                qc_lsts["num_step_reductions"].append(n_reductions[converged].numpy(force=True))
+                qc_lsts["num_steps_total"].append(n_total[finished].numpy(force=True))
+                qc_lsts["num_restarts"].append(n_restarts[finished].numpy(force=True))
+                qc_lsts["num_step_reductions"].append(n_reductions[finished].numpy(force=True))
                 qc_lsts["num_filtered"].append(filtered_out.numpy(force=True))
                 qc_lsts["global_scale"].append(global_scale_out.numpy(force=True))
                 qc_lsts["step_size"].append(step_sizes_out.numpy(force=True))
                 qc_lsts["peak_id"].append(inds_out.numpy(force=True).astype(np.uint32))
+                if K > 1:
+                    lam_out = lam_idx[finished]
+                    qc_lsts["lambda_index"].append(lam_out.numpy(force=True).astype(np.uint32))
+                    lambda_index_lst.append(
+                        lam_out[coef_out.indices()[0]].numpy(force=True).astype(np.uint32)
+                    )
+
+                # Regions with another lambda to go continue from this solution; a failed fit
+                # starts that lambda from zero, as a new region would
+                advance = finished & ~converged
+                if advance.any():
+                    restart = advance & fails
+                    coef[restart, :, :] = 0.0
+                    coef_inter[advance, :, :] = coef[advance, :, :]
+                    lam_idx[advance] += 1
+                    lam_buf[advance] = lambda_grid_tensor[lam_idx[advance]][:, :, None]
+                    i[advance] = 0
+                    n_total[advance] = 0
+                    n_restarts[advance] = 0
+                    n_reductions[advance] = 0
+                    gap_min[advance] = float("inf")
+                    gap_ref[advance] = float("inf")
+                    step_sizes[advance] = step_size_max
 
                 num_complete += num_load
                 pbar.update(num_load)
@@ -944,6 +989,8 @@ def fit_contribs(
         "hit_importance": scores_importance,
         "hit_importance_sq": scores_importance_sq,
     }
+    if K > 1:
+        hits["lambda_index"] = np.concatenate(lambda_index_lst, axis=0)
 
     qc: Dict[str, ndarray] = {k: np.concatenate(v, axis=0) for k, v in qc_lsts.items()}
 

@@ -18,6 +18,8 @@ import warnings
 import inspect
 from typing import Optional, List
 
+import numpy as np
+
 import polars as pl
 
 
@@ -193,6 +195,9 @@ def call_hits(
     mode: str = "pp",
     no_post_filter: bool = False,
     compile_optimizer: bool = False,
+    lambda_grid: Optional[List[float]] = None,
+    check_every: int = 1,
+    allow_tf32: Optional[bool] = None,
 ) -> None:
     """Call motif hits using the Fi-NeMo algorithm on preprocessed genomic regions.
 
@@ -249,6 +254,14 @@ def call_hits(
         Contribution type mode ('pp', 'ph', 'hp', 'hh') where 'p'=projected, 'h'=hypothetical.
     no_post_filter : bool, default False
         If True, skip post-hit-calling similarity filtering.
+    lambda_grid : list of float, optional
+        Several global lambdas solved in one run, in decreasing order, each warm-started from the
+        previous one's solution. The outputs for each go to ``out_dir/lambda_<value>/``, each laid
+        out as a single-lambda run. Cannot be combined with ``motif_lambdas_path``.
+    check_every : int, default 1
+        Assess convergence every ``check_every`` optimization steps.
+    allow_tf32 : bool, optional
+        Whether GPU convolutions may use TF32; None keeps PyTorch's setting.
     compile_optimizer : bool, default False
         Whether to JIT-compile the optimizer for speed.
 
@@ -349,6 +362,11 @@ def call_hits(
     num_motifs = cwms.shape[0]
     motif_width = cwms.shape[2]
     lambdas = motifs_df.get_column("lambda").to_numpy(writable=True)
+    if lambda_grid is not None:
+        if motif_lambdas_path is not None:
+            raise ValueError("A lambda grid cannot be combined with motif-specific lambdas")
+        lambda_grid = sorted({float(v) for v in lambda_grid}, reverse=True)
+        lambdas = np.array([np.full(num_motifs, v, dtype=np.float32) for v in lambda_grid])
 
     device_obj = torch.device(device) if device is not None else None
     hits_df, qc_df = hitcaller.fit_contribs(
@@ -368,18 +386,9 @@ def call_hits(
         not no_post_filter,
         device_obj,
         compile_optimizer,
+        check_every=check_every,
+        allow_tf32=allow_tf32,
     )
-
-    os.makedirs(out_dir, exist_ok=True)
-    out_path_qc = os.path.join(out_dir, "peaks_qc.tsv")
-    data_io.write_hits(hits_df, peaks_df, motifs_df, qc_df, out_dir, motif_width)
-    data_io.write_qc(qc_df, peaks_df, out_path_qc)
-
-    out_path_motif_df = os.path.join(out_dir, "motif_data.tsv")
-    data_io.write_motifs_df(motifs_df, out_path_motif_df)
-
-    out_path_motif_cwms = os.path.join(out_dir, "motif_cwms.npy")
-    data_io.write_motif_cwms(cwms, out_path_motif_cwms)
 
     params |= {
         "region_width": region_width,
@@ -388,8 +397,27 @@ def call_hits(
         "num_motifs": num_motifs,
     }
 
-    out_path_params = os.path.join(out_dir, "parameters.json")
-    data_io.write_params(params, out_path_params)
+    if lambda_grid is None:
+        runs = [(out_dir, hits_df, qc_df, motifs_df, params)]
+    else:
+        runs = []
+        for k, value in enumerate(lambda_grid):
+            runs.append((
+                os.path.join(out_dir, f"lambda_{value:g}"),
+                hits_df.filter(pl.col("lambda_index") == k).drop("lambda_index"),
+                qc_df.filter(pl.col("lambda_index") == k).drop("lambda_index"),
+                motifs_df.with_columns(pl.lit(value, dtype=pl.Float32).alias("lambda")),
+                params | {"lambda_default": value, "lambda_grid": lambda_grid,
+                          "out_dir": os.path.join(out_dir, f"lambda_{value:g}")},
+            ))
+
+    for run_dir, run_hits, run_qc, run_motifs, run_params in runs:
+        os.makedirs(run_dir, exist_ok=True)
+        data_io.write_hits(run_hits, peaks_df, run_motifs, run_qc, run_dir, motif_width)
+        data_io.write_qc(run_qc, peaks_df, os.path.join(run_dir, "peaks_qc.tsv"))
+        data_io.write_motifs_df(run_motifs, os.path.join(run_dir, "motif_data.tsv"))
+        data_io.write_motif_cwms(cwms, os.path.join(run_dir, "motif_cwms.npy"))
+        data_io.write_params(run_params, os.path.join(run_dir, "parameters.json"))
 
 
 def report(
@@ -1041,6 +1069,13 @@ def cli() -> None:
         help="The default L1 regularization weight determining the sparsity of hits.",
     )
     call_hits_parser.add_argument(
+        "--lambda-grid",
+        type=float,
+        nargs="+",
+        default=None,
+        help="Several global lambdas, solved in one run from the largest down, each fit starting from the previous solution. Outputs go to `<out-dir>/lambda_<value>/`, one complete call-hits output per lambda. Replaces `--global-lambda`; cannot be combined with `--motif-lambdas`.",
+    )
+    call_hits_parser.add_argument(
         "-L",
         "--motif-lambdas",
         type=str,
@@ -1128,6 +1163,17 @@ def cli() -> None:
         "--compile",
         action="store_true",
         help="JIT-compile the optimizer for faster performance. This may not be supported on older GPUs.",
+    )
+    call_hits_parser.add_argument(
+        "--check-every",
+        type=int,
+        default=inspect.signature(call_hits).parameters["check_every"].default,
+        help="Assess convergence every this many optimization steps. Steps in between skip computing the duality gap; a region stops at most this many steps minus one later.",
+    )
+    call_hits_parser.add_argument(
+        "--no-tf32",
+        action="store_true",
+        help="Do not let GPU convolutions use TF32 (Ampere and newer GPUs). TF32 is faster but rounds convolution inputs, so results differ slightly between GPU types; disable it for results that agree across hardware.",
     )
 
     report_parser = subparsers.add_parser(
@@ -1346,6 +1392,9 @@ def cli() -> None:
             args.mode,
             args.no_post_filter,
             args.compile,
+            args.lambda_grid,
+            args.check_every,
+            False if args.no_tf32 else None,
         )
 
     elif args.cmd == "report":

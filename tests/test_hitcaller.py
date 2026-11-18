@@ -3,6 +3,7 @@
 import os
 
 import numpy as np
+import polars as pl
 import pytest
 import torch
 
@@ -262,3 +263,32 @@ def test_tf32_setting_is_restored(problem, cpu, allow):
     assert seen and all(v == allow for v in seen)
     assert (torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32) == before
 
+
+def test_lambda_grid_reaches_each_optimum_with_warm_starts(problem, cpu):
+    """Each row of a lambda grid is solved to its own optimum; warm starts save steps on later rows."""
+    tol = 1e-5
+    grid = [0.9, 0.8, 0.7]
+    M = problem["cwms"].shape[0]
+    args = (problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False)
+    hits, qc = hitcaller.fit_contribs(*args, np.array([np.full(M, v, np.float32) for v in grid]),
+                                      convergence_tol=tol, post_filter=False, device=cpu, batch_size=4)
+    n = problem["sequences"].shape[0]
+    assert qc.height == n * len(grid) and set(qc["lambda_index"].unique()) == {0, 1, 2}
+    for k, v in enumerate(grid):
+        ref = Reference(problem, lambdas=np.full(M, v))
+        _, P_star = ref.solve()
+        P, _ = ref.objective_and_gap(dense_coefficients(hits.filter(pl.col("lambda_index") == k), ref.shape))
+        assert (P - P_star <= tol + 1e-6).all(), (v, P - P_star)
+        if k:
+            _, qc_alone = hitcaller.fit_contribs(*args, np.full(M, v, np.float32), convergence_tol=tol,
+                                                 post_filter=False, device=cpu, batch_size=4)
+            warm = qc.filter(pl.col("lambda_index") == k)["num_steps_total"].sum()
+            assert warm < qc_alone["num_steps_total"].sum()
+
+
+def test_single_row_grid_is_a_single_lambda(problem, cpu):
+    args = (problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False)
+    hits1, qc1 = hitcaller.fit_contribs(*args, problem["lambdas"], device=cpu, batch_size=4)
+    hits2, qc2 = hitcaller.fit_contribs(*args, problem["lambdas"][None, :], device=cpu, batch_size=4)
+    assert "lambda_index" not in qc2.columns and "lambda_index" not in hits2.columns
+    assert hits1.equals(hits2) and qc1.equals(qc2)

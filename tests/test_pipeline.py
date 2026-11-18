@@ -56,3 +56,36 @@ def test_occurrences_include_regions_without_hits():
     assert occ["peak_id"].to_list() == [0, 1, 2, 3]
     assert occ["total"].to_list() == [2, 0, 1, 0]
     assert co.shape == (3, 3)
+
+
+def test_call_hits_lambda_grid_writes_one_output_per_lambda(inputs):
+    prob, h5, tmp = inputs
+    regions = str(tmp / "regions.npz")
+    data_io.write_regions_npz(prob["sequences"], prob["contribs"], regions)
+    out = tmp / "grid"
+    main.call_hits(regions, None, h5, None, None, None, None, str(out), device="cpu", batch_size=4,
+                   lambda_grid=[0.7, 0.9])
+    import json
+    for v in ("0.9", "0.7"):
+        d = out / f"lambda_{v}"
+        for f in ("hits.tsv", "hits_unique.tsv", "hits.bed", "peaks_qc.tsv", "motif_data.tsv", "motif_cwms.npy",
+                  "parameters.json"):
+            assert (d / f).exists(), (v, f)
+        assert json.load(open(d / "parameters.json"))["lambda_default"] == float(v)
+        qc = pl.read_csv(d / "peaks_qc.tsv", separator="\t")
+        assert qc.height == prob["sequences"].shape[0] and "lambda_index" not in qc.columns
+        assert (pl.read_csv(d / "motif_data.tsv", separator="\t")["lambda"] == float(v)).all()
+    n09 = pl.read_csv(out / "lambda_0.9" / "hits.tsv", separator="\t").height
+    n07 = pl.read_csv(out / "lambda_0.7" / "hits.tsv", separator="\t").height
+    assert n07 >= n09
+
+
+def test_lambda_grid_rejects_motif_lambdas(inputs):
+    prob, h5, tmp = inputs
+    regions = str(tmp / "regions.npz")
+    data_io.write_regions_npz(prob["sequences"], prob["contribs"], regions)
+    lams = tmp / "lambdas.tsv"
+    lams.write_text("pos_patterns.pattern_0\t0.5\n")
+    with pytest.raises(ValueError):
+        main.call_hits(regions, None, h5, None, None, None, str(lams), str(tmp / "o"), device="cpu",
+                       lambda_grid=[0.7, 0.9])
