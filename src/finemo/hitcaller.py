@@ -33,7 +33,8 @@ def prox_grad_step(
     sequences: Union[Int[Tensor, "B 4 L"], int],
     lambdas: Float[Tensor, "1 M 1"],
     step_sizes: Float[Tensor, "B 1 1"],
-) -> Tuple[Float[Tensor, "B M P"], Float[Tensor, " B"], Float[Tensor, " B"]]:
+    compute_gap: bool = True,
+) -> Tuple[Float[Tensor, "B M P"], Optional[Tensor], Optional[Tensor]]:
     """Perform a proximal gradient descent optimization step for non-negative lasso.
 
     This function implements a single optimization step of the Fi-NeMo algorithm,
@@ -65,15 +66,18 @@ def prox_grad_step(
         L1 regularization weights for each motif.
     step_sizes : Float[Tensor, "B 1 1"]
         Optimization step sizes for each batch element.
+    compute_gap : bool, default True
+        Whether to compute the duality gap and NLL of the new coefficients, which costs a
+        second pair of convolutions. Without it both are returned as None.
 
     Returns
     -------
     c_next : Float[Tensor, "B M P"]
         Updated coefficient matrix after the optimization step (shape: batch_size × motifs × positions).
-    dual_gap : Float[Tensor, " B"]
-        Duality gap for convergence assessment (shape: batch_size).
-    nll : Float[Tensor, " B"]
-        Negative log likelihood (proportional to MSE, shape: batch_size).
+    dual_gap : Float[Tensor, " B"] or None
+        Duality gap of c_next for convergence assessment (shape: batch_size).
+    nll : Float[Tensor, " B"] or None
+        Squared residual norm of c_next (twice the NLL term of the objective, shape: batch_size).
 
     Notes
     -----
@@ -102,6 +106,8 @@ def prox_grad_step(
     # Compute proximal gradient descent step
     c_next = coefficients + step_sizes * (ngrad - lambdas)  # (B, M, P)
     c_next = F.relu(c_next)  # Ensure non-negativity constraint
+    if not compute_gap:
+        return c_next, None, None
 
     # Duality gap at the new, feasible coefficients (the ones that are saved), with the
     # dual point t * r, t = 1 / max(1, max_j (A'r)_j / lambda_j). The gap
@@ -131,11 +137,12 @@ def optimizer_step(
     step_sizes: Float[Tensor, "B 1 1"],
     L: int,
     lambdas: Float[Tensor, "1 M 1"],
+    compute_gap: bool = True,
 ) -> Tuple[
     Float[Tensor, "B M P"],
     Float[Tensor, "B M P"],
-    Float[Tensor, " B"],
-    Float[Tensor, " B"],
+    Optional[Tensor],
+    Optional[Tensor],
 ]:
     """Perform a non-negative lasso optimizer step with Nesterov momentum.
 
@@ -172,6 +179,8 @@ def optimizer_step(
         Sequence length for normalization.
     lambdas : Float[Tensor, "1 M 1"]
         Regularization parameters.
+    compute_gap : bool, default True
+        Whether to compute the duality gap and NLL (None otherwise); see prox_grad_step.
 
     Returns
     -------
@@ -179,9 +188,9 @@ def optimizer_step(
         Updated intermediate coefficients with momentum (shape: batch_size × motifs × positions).
     coef : Float[Tensor, "B M P"]
         Updated coefficient matrix (shape: batch_size × motifs × positions).
-    gap : Float[Tensor, " B"]
+    gap : Float[Tensor, " B"] or None
         Normalized duality gap (shape: batch_size).
-    nll : Float[Tensor, " B"]
+    nll : Float[Tensor, " B"] or None
         Normalized negative log likelihood (shape: batch_size).
 
     Notes
@@ -198,10 +207,12 @@ def optimizer_step(
 
     # Proximal gradient descent step
     coef, gap, nll = prox_grad_step(
-        coef_inter, importance_scale, cwms, contribs, sequences, lambdas, step_sizes
+        coef_inter, importance_scale, cwms, contribs, sequences, lambdas, step_sizes,
+        compute_gap,
     )
-    gap = gap / L
-    nll = nll / (2 * L)
+    if gap is not None:
+        gap = gap / L
+        nll = nll / (2 * L)
 
     # Compute updated coefficients with Nesterov momentum
     mom_term = i / (i + 3.0)
@@ -443,6 +454,7 @@ def fit_contribs(
     stall_window: int = 1000,
     stall_improvement: float = 0.01,
     early_restart: bool = True,
+    check_every: int = 1,
 ) -> Tuple[pl.DataFrame, pl.DataFrame]:
     """Call motif hits by fitting sparse linear model to contribution scores.
 
@@ -504,6 +516,11 @@ def fit_contribs(
         Restart a region with a smaller step as soon as its objective exceeds that of the empty
         fit (0.5 per bp, since the scores are RMS-normalized) by 0.1%, instead of waiting for the
         divergence to overflow to a non-finite gap.
+    check_every : int, default 1
+        Compute the duality gap and assess convergence, divergence, stalls and timeouts only
+        every ``check_every`` steps. The steps in between skip the gap's extra convolutions and
+        the transfers from the device; a region stops at most ``check_every - 1`` steps later.
+        ``stall_start`` and ``stall_window`` must be multiples of it.
 
     Returns
     -------
@@ -693,6 +710,13 @@ def fit_contribs(
         (B,), dtype=torch.float, device=device
     )
 
+    if check_every < 1 or stall_start % check_every or stall_window % check_every:
+        raise ValueError(
+            f"check_every ({check_every}) must be positive and divide stall_start "
+            f"({stall_start}) and stall_window ({stall_window})"
+        )
+    step_count = 0  # regions are loaded only after a check, so their step counts stay aligned with it
+
     with tqdm(disable=None, unit="regions", total=N, ncols=120) as pbar:
         num_complete = 0
         next_ind = 0
@@ -740,6 +764,8 @@ def fit_contribs(
                 step_sizes[converged] = step_size_max
 
             # Optimization step
+            step_count += 1
+            check = step_count % check_every == 0
             coef_inter, coef, gap, nll = step_fn(
                 cwms_tensor,
                 contribs_buf,
@@ -751,9 +777,13 @@ def fit_contribs(
                 step_sizes,
                 L,
                 lambdas_tensor,
+                check,
             )
             i += 1
             n_total += 1
+            if not check:
+                num_load = 0
+                continue
 
             # Assess convergence of each peak being optimized. Reset diverged peaks with lower step size.
             active = inds_buf >= 0

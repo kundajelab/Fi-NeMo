@@ -135,3 +135,11 @@ def problem():
 @pytest.fixture
 def cpu():
     return torch.device("cpu")
+
+
+@pytest.fixture(scope="session")
+def default_reference():
+    """Reference and float64 optimum (per bp, per region) of the default synthetic problem, solved once."""
+    ref = Reference(synthetic_problem())
+    _, P_star = ref.solve()
+    return ref, P_star

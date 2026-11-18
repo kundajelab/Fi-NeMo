@@ -153,11 +153,10 @@ def test_qc_counts_placements_removed_by_the_post_filter(problem, cpu):
     assert (counts["num_filtered"] == counts["off"] - counts["on"]).all()
 
 
-def test_stall_safeguard_keeps_the_optimum(problem, cpu):
+def test_stall_safeguard_keeps_the_optimum(problem, cpu, default_reference):
     """Forced reductions (every 10 steps after 20) still converge to the optimum, and are counted."""
     tol = 1e-5
-    ref = Reference(problem)
-    _, P_star = ref.solve()
+    ref, P_star = default_reference
     hits, qc = hitcaller.fit_contribs(
         problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False,
         problem["lambdas"], convergence_tol=tol, post_filter=False, device=cpu, batch_size=4,
@@ -187,12 +186,11 @@ def test_max_steps_counts_restarts(problem, cpu):
     assert (qc["num_steps_total"].to_numpy() <= 31).all()
 
 
-def test_early_restart_catches_divergence_before_overflow(problem, cpu):
+def test_early_restart_catches_divergence_before_overflow(problem, cpu, default_reference):
     """With a step far too large, restarting once the fit is worse than empty saves the steps spent overflowing."""
     tol = 1e-5
     args = (problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False, problem["lambdas"])
-    ref = Reference(problem)
-    _, P_star = ref.solve()
+    ref, P_star = default_reference
     qcs = {}
     for step in (3.0, 60.0):
         for early in (False, True):
@@ -208,3 +206,38 @@ def test_early_restart_catches_divergence_before_overflow(problem, cpu):
     assert (late["num_restarts"].to_numpy() > 0).any()
     assert early["num_restarts"].to_list() == late["num_restarts"].to_list()
     assert early["num_steps_total"].sum() < late["num_steps_total"].sum()
+
+
+def test_prox_grad_step_can_skip_the_gap(problem):
+    ref = Reference(problem)
+    t = _tensors(problem, ref)
+    z = torch.as_tensor(np.random.default_rng(2).random(ref.shape) * 0.01, dtype=torch.float32)
+    step = torch.full((ref.shape[0], 1, 1), 0.5)
+    args = (z, t["importance_scale"], t["cwms"], t["contribs"], t["sequences"], t["lambdas"], step)
+    c_with, gap, _ = hitcaller.prox_grad_step(*args)
+    c_without, no_gap, no_nll = hitcaller.prox_grad_step(*args, compute_gap=False)
+    assert no_gap is None and no_nll is None and gap is not None
+    assert torch.equal(c_with, c_without)
+
+
+@pytest.mark.parametrize("check_every", [5, 20])
+def test_sparse_checks_reach_the_optimum(problem, cpu, default_reference, check_every):
+    tol = 1e-5
+    ref, P_star = default_reference
+    hits, qc = hitcaller.fit_contribs(
+        problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False,
+        problem["lambdas"], convergence_tol=tol, post_filter=False, device=cpu, batch_size=4,
+        check_every=check_every,
+    )
+    P, G = ref.objective_and_gap(dense_coefficients(hits, ref.shape))
+    assert (P - P_star <= tol + 1e-6).all()
+    assert (qc["num_steps_total"].to_numpy() % check_every == 0).all()
+    np.testing.assert_allclose(qc.sort("peak_id")["dual_gap"].to_numpy(), G, rtol=1e-3, atol=1e-6)
+
+
+def test_check_every_must_divide_the_stall_window(problem, cpu):
+    with pytest.raises(ValueError):
+        hitcaller.fit_contribs(
+            problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False,
+            problem["lambdas"], device=cpu, check_every=7,
+        )
