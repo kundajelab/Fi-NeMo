@@ -10,6 +10,7 @@ at specific genomic positions. The sparsity constraint ensures that only the mos
 significant motif instances are called.
 """
 
+import contextlib
 import warnings
 from typing import Tuple, Union, Optional, Dict, List
 from abc import ABC, abstractmethod
@@ -241,6 +242,21 @@ def _to_channel_last_layout(tensor: Tensor, **kwargs) -> torch.Tensor:
     )
 
 
+@contextlib.contextmanager
+def _tf32_setting(allow_tf32: Optional[bool]):
+    """Set whether convolutions (and matrix products) may use TF32 inside the block; None leaves PyTorch's setting."""
+    if allow_tf32 is None:
+        yield
+        return
+    previous = (torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32)
+    torch.backends.cudnn.allow_tf32 = allow_tf32
+    torch.backends.cuda.matmul.allow_tf32 = allow_tf32
+    try:
+        yield
+    finally:
+        torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32 = previous
+
+
 def _signed_sqrt(x: torch.Tensor) -> torch.Tensor:
     """Apply signed square root transformation to input tensor.
 
@@ -455,6 +471,7 @@ def fit_contribs(
     stall_improvement: float = 0.01,
     early_restart: bool = True,
     check_every: int = 1,
+    allow_tf32: Optional[bool] = None,
 ) -> Tuple[pl.DataFrame, pl.DataFrame]:
     """Call motif hits by fitting sparse linear model to contribution scores.
 
@@ -521,6 +538,12 @@ def fit_contribs(
         every ``check_every`` steps. The steps in between skip the gap's extra convolutions and
         the transfers from the device; a region stops at most ``check_every - 1`` steps later.
         ``stall_start`` and ``stall_window`` must be multiples of it.
+    allow_tf32 : bool, optional
+        Whether the convolutions may run in TF32 on GPUs that support it (Ampere and newer).
+        TF32 is faster but rounds the inputs of every convolution to a 10-bit mantissa, so
+        results differ slightly between GPU types. None (the default) keeps PyTorch's setting
+        (``torch.backends.cudnn.allow_tf32``, True unless changed); the setting is restored
+        afterwards.
 
     Returns
     -------
@@ -717,7 +740,7 @@ def fit_contribs(
         )
     step_count = 0  # regions are loaded only after a check, so their step counts stay aligned with it
 
-    with tqdm(disable=None, unit="regions", total=N, ncols=120) as pbar:
+    with _tf32_setting(allow_tf32), tqdm(disable=None, unit="regions", total=N, ncols=120) as pbar:
         num_complete = 0
         next_ind = 0
         while num_complete < N:

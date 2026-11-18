@@ -241,3 +241,24 @@ def test_check_every_must_divide_the_stall_window(problem, cpu):
             problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False,
             problem["lambdas"], device=cpu, check_every=7,
         )
+
+
+@pytest.mark.parametrize("allow", [True, False])
+def test_tf32_setting_is_restored(problem, cpu, allow):
+    before = (torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32)
+    seen = []
+    original = hitcaller.prox_grad_step
+
+    def spy(*args, **kwargs):
+        seen.append(torch.backends.cudnn.allow_tf32)
+        return original(*args, **kwargs)
+
+    hitcaller.prox_grad_step = spy
+    try:
+        hitcaller.fit_contribs(problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False,
+                               problem["lambdas"], max_steps=10, device=cpu, batch_size=4, allow_tf32=allow)
+    finally:
+        hitcaller.prox_grad_step = original
+    assert seen and all(v == allow for v in seen)
+    assert (torch.backends.cudnn.allow_tf32, torch.backends.cuda.matmul.allow_tf32) == before
+
