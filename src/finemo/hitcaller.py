@@ -831,7 +831,8 @@ def fit_contribs(
             diverged = ~torch.isfinite(gap)
             if early_restart:
                 # The empty fit scores 0.5 per bp; a fit above it is diverging (or overshooting)
-                objective = nll + (coef * lam_buf).sum(dim=(1, 2)) / L
+                # sum over positions first: no (B, M, P) temporary
+                objective = nll + (coef.sum(dim=2) * lam_buf[:, :, 0]).sum(dim=1) / L
                 diverged |= objective > 0.5 * (1 + 1e-3)
             diverged &= active
             coef_inter[diverged, :, :] = 0.0
