@@ -507,7 +507,10 @@ def fit_contribs(
         - peak_id: Region index
         - nll: Final negative log likelihood
         - dual_gap: Final duality gap
-        - num_steps: Number of optimization steps
+        - num_steps: Number of optimization steps since the last restart
+        - num_steps_total: Number of optimization steps, restarts included
+        - num_restarts: Number of restarts after a non-finite duality gap
+        - num_filtered: Number of placements removed by the similarity post-filter
         - step_size: Final step size
         - global_scale: Region-level scaling factor
 
@@ -621,6 +624,9 @@ def fit_contribs(
         "nll": [],
         "dual_gap": [],
         "num_steps": [],
+        "num_steps_total": [],
+        "num_restarts": [],
+        "num_filtered": [],
         "step_size": [],
         "global_scale": [],
         "peak_id": [],
@@ -633,6 +639,9 @@ def fit_contribs(
     coef_inter = _to_channel_last_layout(coef_inter, device=device, dtype=torch.float32)
     coef: Float[Tensor, "B M P"] = torch.zeros_like(coef_inter)
     i: Float[Tensor, "B 1 1"] = torch.zeros((B, 1, 1), dtype=torch.int, device=device)
+    # Steps since the region was loaded, restarts included (i restarts at 0 after each)
+    n_total: Int[Tensor, " B"] = torch.zeros((B,), dtype=torch.int, device=device)
+    n_restarts: Int[Tensor, " B"] = torch.zeros((B,), dtype=torch.int, device=device)
     step_sizes: Float[Tensor, "B 1 1"] = torch.full(
         (B, 1, 1), step_size_max, dtype=torch.float32, device=device
     )
@@ -702,6 +711,8 @@ def fit_contribs(
                 coef_inter[converged, :, :] = 0.0
                 coef[converged, :, :] = 0.0
                 i[converged] = 0
+                n_total[converged] = 0
+                n_restarts[converged] = 0
 
                 step_sizes[converged] = step_size_max
 
@@ -719,6 +730,7 @@ def fit_contribs(
                 lambdas_tensor,
             )
             i += 1
+            n_total += 1
 
             # Assess convergence of each peak being optimized. Reset diverged peaks with lower step size.
             active = inds_buf >= 0
@@ -727,6 +739,7 @@ def fit_contribs(
             coef_inter[diverged, :, :] = 0.0
             coef[diverged, :, :] = 0.0
             i[diverged] = 0
+            n_restarts += diverged.int()
             step_sizes[diverged, :, :] *= step_adjust
 
             timeouts = (i > max_steps).squeeze() & active
@@ -768,8 +781,11 @@ def fit_contribs(
                 # xcov_out_dense = F.conv1d(torch.abs(contribs_converged), cwms_tensor)
                 xcor_out_dense = xcov_out_dense / xcor_scale
 
+                # Placements the similarity filter removes: many in a region flag a poor fit
+                num_placed = (coef_out > 0).sum(dim=(1, 2))
                 if post_filter:
                     coef_out = coef_out * (xcor_out_dense >= lambdas_tensor)
+                filtered_out = num_placed - (coef_out > 0).sum(dim=(1, 2))
 
                 # Extract hit coordinates using sparse tensor representation
                 coef_out = coef_out.to_sparse()
@@ -803,6 +819,9 @@ def fit_contribs(
                 qc_lsts["nll"].append(nll_out.numpy(force=True))
                 qc_lsts["dual_gap"].append(gap_out.numpy(force=True))
                 qc_lsts["num_steps"].append(step_out.numpy(force=True))
+                qc_lsts["num_steps_total"].append(n_total[converged].numpy(force=True))
+                qc_lsts["num_restarts"].append(n_restarts[converged].numpy(force=True))
+                qc_lsts["num_filtered"].append(filtered_out.numpy(force=True))
                 qc_lsts["global_scale"].append(global_scale_out.numpy(force=True))
                 qc_lsts["step_size"].append(step_sizes_out.numpy(force=True))
                 qc_lsts["peak_id"].append(inds_out.numpy(force=True).astype(np.uint32))
