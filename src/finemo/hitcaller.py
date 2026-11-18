@@ -442,6 +442,7 @@ def fit_contribs(
     stall_start: int = 2000,
     stall_window: int = 1000,
     stall_improvement: float = 0.01,
+    early_restart: bool = True,
 ) -> Tuple[pl.DataFrame, pl.DataFrame]:
     """Call motif hits by fitting sparse linear model to contribution scores.
 
@@ -499,6 +500,10 @@ def fit_contribs(
         steps, a region whose best duality gap over the window improves by less than the fraction
         ``stall_improvement`` on the window before has its step size multiplied by ``step_adjust``
         and its momentum reset.
+    early_restart : bool, default True
+        Restart a region with a smaller step as soon as its objective exceeds that of the empty
+        fit (0.5 per bp, since the scores are RMS-normalized) by 0.1%, instead of waiting for the
+        divergence to overflow to a non-finite gap.
 
     Returns
     -------
@@ -518,7 +523,7 @@ def fit_contribs(
         - dual_gap: Final duality gap
         - num_steps: Number of optimization steps since the last restart
         - num_steps_total: Number of optimization steps, restarts included
-        - num_restarts: Number of restarts after a non-finite duality gap
+        - num_restarts: Number of restarts after a divergence
         - num_step_reductions: Number of step size reductions by the stall safeguard
         - num_filtered: Number of placements removed by the similarity post-filter
         - step_size: Final step size
@@ -753,7 +758,13 @@ def fit_contribs(
             # Assess convergence of each peak being optimized. Reset diverged peaks with lower step size.
             active = inds_buf >= 0
 
-            diverged = ~torch.isfinite(gap) & active
+            diverged = ~torch.isfinite(gap)
+            if early_restart:
+                # The empty fit scores 0.5 per bp; a fit above it is diverging (or overshooting)
+                # sum over positions first: no (B, M, P) temporary
+                objective = nll + (coef.sum(dim=2) * lambdas_tensor[:, :, 0]).sum(dim=1) / L
+                diverged |= objective > 0.5 * (1 + 1e-3)
+            diverged &= active
             coef_inter[diverged, :, :] = 0.0
             coef[diverged, :, :] = 0.0
             i[diverged] = 0
