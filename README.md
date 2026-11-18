@@ -214,7 +214,7 @@ Usage: `finemo call-hits -r <regions> -m <modisco_h5> -o <out_dir> [-p <peaks>] 
 - `peak_id`: The numerical index of the peak region.
 - `nll`: The final regression negative log likelihood, proportional to the mean squared error (MSE).
 - `dual_gap`: The final duality gap.
-- `num_steps`: The number of optimization steps taken.
+- `num_steps`: The number of optimization steps taken since the last restart.
 - `step_size`: The optimization step size.
 - `global_scale`: The peak-level scaling factor, used to normalize by overall importance.
 - `peak_id`: The numerical index of the peak region containing the hit.
