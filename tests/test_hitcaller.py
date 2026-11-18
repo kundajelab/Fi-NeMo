@@ -126,3 +126,28 @@ def test_spi1_region_that_stopped_early(cpu):
     P, _ = ref.objective_and_gap(dense_coefficients(hits, ref.shape))
     assert P[0] - 0.4702005 <= 5e-5 + 1e-6  # float64 optimum of this problem (unit-norm trimmed CWMs)
     assert hits.height == 8
+
+
+def test_qc_counts_steps_across_restarts(problem, cpu):
+    """A step far too large forces restarts; num_steps restarts at 0 but num_steps_total does not."""
+    _, qc = hitcaller.fit_contribs(
+        problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False,
+        problem["lambdas"], step_size_max=60.0, device=cpu, batch_size=4,
+    )
+    restarted = qc["num_restarts"].to_numpy() > 0
+    assert restarted.any()
+    total, since = qc["num_steps_total"].to_numpy(), qc["num_steps"].to_numpy()
+    assert (total[restarted] > since[restarted]).all()
+    assert (total[~restarted] == since[~restarted]).all()
+
+
+def test_qc_counts_placements_removed_by_the_post_filter(problem, cpu):
+    args = (problem["cwms"], problem["contribs"], problem["sequences"], problem["mask"], False, problem["lambdas"])
+    hits_on, qc_on = hitcaller.fit_contribs(*args, post_filter=True, device=cpu, batch_size=4)
+    hits_off, qc_off = hitcaller.fit_contribs(*args, post_filter=False, device=cpu, batch_size=4)
+    assert (qc_off["num_filtered"].to_numpy() == 0).all()
+    n_on = hits_on.group_by("peak_id").len().rename({"len": "on"})
+    n_off = hits_off.group_by("peak_id").len().rename({"len": "off"})
+    counts = qc_on.select("peak_id", "num_filtered").join(n_off, on="peak_id", how="left").join(
+        n_on, on="peak_id", how="left").fill_null(0)
+    assert (counts["num_filtered"] == counts["off"] - counts["on"]).all()
