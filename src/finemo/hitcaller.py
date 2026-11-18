@@ -431,7 +431,7 @@ def fit_contribs(
     step_size_max: float = 3.0,
     step_size_min: float = 0.08,
     sqrt_transform: bool = False,
-    convergence_tol: float = 0.0005,
+    convergence_tol: float = 0.00005,
     max_steps: int = 10000,
     batch_size: int = 2000,
     step_adjust: float = 0.7,
@@ -474,7 +474,7 @@ def fit_contribs(
         Minimum optimization step size (for convergence failure detection).
     sqrt_transform : bool, default False
         Whether to apply signed square root transformation to inputs.
-    convergence_tol : float, default 0.0005
+    convergence_tol : float, default 0.00005
         Convergence tolerance based on duality gap.
     max_steps : int, default 10000
         Maximum number of optimization steps.
